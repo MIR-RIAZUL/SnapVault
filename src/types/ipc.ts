@@ -135,3 +135,17 @@ export interface RestoreEntryInput {
   restore_dir: string;
   overwrite?: boolean;
 }
+
+export interface FilePreviewResponse {
+  relative_path: string;
+  file_size: number;
+  modified_at: string;
+  file_hash: string;
+  is_text: boolean;
+  is_image: boolean;
+  too_large: boolean;
+  snapshot_content?: string | null;
+  current_content?: string | null;
+  snapshot_data_uri?: string | null;
+  current_data_uri?: string | null;
+}

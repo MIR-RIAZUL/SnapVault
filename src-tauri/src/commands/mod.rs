@@ -8,8 +8,8 @@ use crate::db::models::{BackupJob, Drive, Snapshot};
 use crate::db::DatabaseManager;
 use crate::engine::prune::{prune_and_garbage_collect, PruneResult};
 use crate::engine::restore::{
-    browse_snapshot_dir, diff_snapshots, restore_from_snapshot, RestoreResult, SnapshotDiffItem,
-    SnapshotDirEntry,
+    browse_snapshot_dir, diff_snapshots, preview_snapshot_file as engine_preview_snapshot_file,
+    restore_from_snapshot, FilePreviewResponse, RestoreResult, SnapshotDiffItem, SnapshotDirEntry,
 };
 use crate::engine::snapshot::{execute_snapshot, SnapshotManifest, SnapshotProgress};
 
@@ -285,4 +285,15 @@ pub fn prune_snapshots(
     job_id: i64,
 ) -> Result<PruneResult, String> {
     prune_and_garbage_collect(&db, job_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn preview_snapshot_file(
+    db: State<'_, DatabaseManager>,
+    snapshot_id: i64,
+    rel_path: String,
+    current_source_root: Option<String>,
+) -> Result<FilePreviewResponse, String> {
+    engine_preview_snapshot_file(&db, snapshot_id, &rel_path, current_source_root.as_deref())
+        .map_err(|e| e.to_string())
 }

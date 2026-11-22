@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use base64::Engine;
 use chrono::Utc;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
@@ -44,6 +45,21 @@ pub struct SnapshotDirEntry {
     pub file_size: i64,
     pub modified_at: String,
     pub file_hash: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FilePreviewResponse {
+    pub relative_path: String,
+    pub file_size: i64,
+    pub modified_at: String,
+    pub file_hash: String,
+    pub is_text: bool,
+    pub is_image: bool,
+    pub too_large: bool,
+    pub snapshot_content: Option<String>,
+    pub current_content: Option<String>,
+    pub snapshot_data_uri: Option<String>,
+    pub current_data_uri: Option<String>,
 }
 
 /// Reassembles chunks for a single file or directory from a COMMITTED snapshot
@@ -409,4 +425,362 @@ pub fn browse_snapshot_dir(
     });
 
     Ok(result)
+}
+
+const MAX_TEXT_PREVIEW_BYTES: i64 = 2 * 1024 * 1024; // 2 MB
+const MAX_IMAGE_PREVIEW_BYTES: i64 = 10 * 1024 * 1024; // 10 MB
+
+/// Reassembles chunks in memory for preview and side-by-side diff
+pub fn preview_snapshot_file(
+    db: &DatabaseManager,
+    snapshot_id: i64,
+    rel_path: &str,
+    current_source_root: Option<&str>,
+) -> Result<FilePreviewResponse> {
+    let normalized_rel = rel_path.replace('\\', "/").trim_start_matches('/').to_string();
+
+    // 1. Fetch snapshot status and destination drive root
+    let (status, dest_root_str) = db.with_conn(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT s.status, d.mount_path 
+             FROM snapshots s 
+             JOIN backup_jobs j ON s.job_id = j.id 
+             JOIN drives d ON j.destination_drive_id = d.id 
+             WHERE s.id = ?1;",
+        )?;
+        let res = stmt.query_row(params![snapshot_id], |row| {
+            let s: String = row.get(0)?;
+            let d: String = row.get(1)?;
+            Ok((s, d))
+        })?;
+        Ok(res)
+    })?;
+
+    if status != "COMMITTED" {
+        return Err(SnapVaultError::General(format!(
+            "Cannot preview from uncommitted snapshot (status: {})",
+            status
+        )));
+    }
+
+    // 2. Fetch file entry
+    let (file_size, modified_at, file_hash, chunk_hashes_json): (i64, String, String, String) =
+        db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT file_size, modified_at, file_blake3_hash, chunk_hashes 
+                 FROM file_entries 
+                 WHERE snapshot_id = ?1 AND relative_path = ?2;",
+            )?;
+            let res = stmt.query_row(params![snapshot_id, normalized_rel], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+            })?;
+            Ok(res)
+        })?;
+
+    // Determine file type from extension
+    let ext = normalized_rel
+        .rsplit('.')
+        .next()
+        .unwrap_or("")
+        .to_ascii_lowercase();
+
+    let is_image = matches!(
+        ext.as_str(),
+        "png" | "jpg" | "jpeg" | "webp" | "bmp" | "gif" | "ico"
+    );
+
+    let is_known_text = matches!(
+        ext.as_str(),
+        "txt"
+            | "md"
+            | "markdown"
+            | "json"
+            | "ts"
+            | "tsx"
+            | "js"
+            | "jsx"
+            | "rs"
+            | "css"
+            | "scss"
+            | "html"
+            | "htm"
+            | "toml"
+            | "yaml"
+            | "yml"
+            | "xml"
+            | "csv"
+            | "log"
+            | "sql"
+            | "py"
+            | "c"
+            | "cpp"
+            | "h"
+            | "hpp"
+            | "sh"
+            | "bat"
+            | "cmd"
+            | "ps1"
+            | "ini"
+            | "env"
+            | "conf"
+            | "lock"
+            | "gitignore"
+            | "svg"
+    );
+
+    // Check size limit
+    if is_image && file_size > MAX_IMAGE_PREVIEW_BYTES {
+        return Ok(FilePreviewResponse {
+            relative_path: normalized_rel,
+            file_size,
+            modified_at,
+            file_hash,
+            is_text: false,
+            is_image: true,
+            too_large: true,
+            snapshot_content: None,
+            current_content: None,
+            snapshot_data_uri: None,
+            current_data_uri: None,
+        });
+    }
+
+    if is_known_text && file_size > MAX_TEXT_PREVIEW_BYTES {
+        return Ok(FilePreviewResponse {
+            relative_path: normalized_rel,
+            file_size,
+            modified_at,
+            file_hash,
+            is_text: true,
+            is_image: false,
+            too_large: true,
+            snapshot_content: None,
+            current_content: None,
+            snapshot_data_uri: None,
+            current_data_uri: None,
+        });
+    }
+
+    // 3. Reassemble chunks in memory
+    let dest_store_root = PathBuf::from(&dest_root_str);
+    let chunk_hashes: Vec<String> = serde_json::from_str(&chunk_hashes_json)
+        .map_err(SnapVaultError::Serialization)?;
+
+    let mut buffer = Vec::with_capacity(file_size.max(0) as usize);
+    for h in &chunk_hashes {
+        let chunk_path = get_chunk_absolute_path(&dest_store_root, h);
+        if !chunk_path.exists() {
+            return Err(SnapVaultError::General(format!(
+                "Missing chunk file {} for file {}",
+                h, normalized_rel
+            )));
+        }
+        let mut f = File::open(&chunk_path).map_err(SnapVaultError::Io)?;
+        f.read_to_end(&mut buffer).map_err(SnapVaultError::Io)?;
+    }
+
+    // Verify BLAKE3 hash
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(&buffer);
+    let computed_hash = hasher.finalize().to_hex().to_string();
+    if computed_hash != file_hash {
+        return Err(SnapVaultError::General(format!(
+            "Hash mismatch for preview of {}: expected {}, got {}",
+            normalized_rel, file_hash, computed_hash
+        )));
+    }
+
+    // Check if it's text even if extension is unknown (if small enough)
+    let is_text = is_known_text || (!is_image && file_size <= MAX_TEXT_PREVIEW_BYTES && std::str::from_utf8(&buffer).is_ok());
+
+    if is_image {
+        let mime = match ext.as_str() {
+            "png" => "image/png",
+            "jpg" | "jpeg" => "image/jpeg",
+            "webp" => "image/webp",
+            "bmp" => "image/bmp",
+            "gif" => "image/gif",
+            "ico" => "image/x-icon",
+            "svg" => "image/svg+xml",
+            _ => "image/png",
+        };
+        let b64 = base64::engine::general_purpose::STANDARD.encode(&buffer);
+        let snapshot_data_uri = Some(format!("data:{};base64,{}", mime, b64));
+
+        let current_data_uri = if let Some(root) = current_source_root {
+            let cur_path = Path::new(root).join(&normalized_rel);
+            if cur_path.exists() && cur_path.is_file() {
+                if let Ok(meta) = fs::metadata(&cur_path) {
+                    if (meta.len() as i64) <= MAX_IMAGE_PREVIEW_BYTES {
+                        if let Ok(cur_bytes) = fs::read(&cur_path) {
+                            let cur_b64 = base64::engine::general_purpose::STANDARD.encode(&cur_bytes);
+                            Some(format!("data:{};base64,{}", mime, cur_b64))
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        return Ok(FilePreviewResponse {
+            relative_path: normalized_rel,
+            file_size,
+            modified_at,
+            file_hash,
+            is_text: false,
+            is_image: true,
+            too_large: false,
+            snapshot_content: None,
+            current_content: None,
+            snapshot_data_uri,
+            current_data_uri,
+        });
+    }
+
+    if is_text {
+        let snapshot_content = Some(String::from_utf8_lossy(&buffer).into_owned());
+
+        let current_content = if let Some(root) = current_source_root {
+            let cur_path = Path::new(root).join(&normalized_rel);
+            if cur_path.exists() && cur_path.is_file() {
+                if let Ok(meta) = fs::metadata(&cur_path) {
+                    if (meta.len() as i64) <= MAX_TEXT_PREVIEW_BYTES {
+                        if let Ok(cur_bytes) = fs::read(&cur_path) {
+                            Some(String::from_utf8_lossy(&cur_bytes).into_owned())
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        return Ok(FilePreviewResponse {
+            relative_path: normalized_rel,
+            file_size,
+            modified_at,
+            file_hash,
+            is_text: true,
+            is_image: false,
+            too_large: false,
+            snapshot_content,
+            current_content,
+            snapshot_data_uri: None,
+            current_data_uri: None,
+        });
+    }
+
+    // Binary file that is not an image
+    Ok(FilePreviewResponse {
+        relative_path: normalized_rel,
+        file_size,
+        modified_at,
+        file_hash,
+        is_text: false,
+        is_image: false,
+        too_large: false,
+        snapshot_content: None,
+        current_content: None,
+        snapshot_data_uri: None,
+        current_data_uri: None,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::engine::snapshot::execute_snapshot;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_preview_snapshot_file_text_and_limits() {
+        let db_dir = tempdir().unwrap();
+        let db_file = db_dir.path().join("test_preview.db");
+        let db = DatabaseManager::new(&db_file).unwrap();
+
+        let source_dir = tempdir().unwrap();
+        let dest_dir = tempdir().unwrap();
+
+        // Write a text file
+        let note_path = source_dir.path().join("notes.txt");
+        fs::write(&note_path, "Original line 1\nOriginal line 2\n").unwrap();
+
+        // Write a small dummy PNG
+        let img_path = source_dir.path().join("test.png");
+        fs::write(&img_path, &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x01]).unwrap();
+
+        // Register drive and job via direct SQL
+        let (job_id, _dest_id) = db
+            .with_conn_mut(|conn| {
+                let now = Utc::now().to_rfc3339();
+                conn.execute(
+                    "INSERT INTO drives (uuid, label, mount_path, role, filesystem, last_seen_at)
+                     VALUES ('preview-drive', 'Preview Drive', ?1, 'destination', 'NTFS', ?2);",
+                    params![dest_dir.path().to_str().unwrap(), now],
+                )?;
+                let dest_id = conn.last_insert_rowid();
+
+                conn.execute(
+                    "INSERT INTO backup_jobs (name, source_path, destination_drive_id, schedule_type)
+                     VALUES ('Preview Job', ?1, ?2, 'manual');",
+                    params![source_dir.path().to_str().unwrap(), dest_id],
+                )?;
+                let job_id = conn.last_insert_rowid();
+
+                Ok((job_id, dest_id))
+            })
+            .unwrap();
+
+        let manifest = execute_snapshot(&db, job_id, |_| {}).unwrap();
+        let snap_id = manifest.snapshot_id;
+
+        // Now modify the source text file on disk
+        fs::write(&note_path, "Original line 1\nModified line 2\nAdded line 3\n").unwrap();
+
+        // Preview text file with current_source_root
+        let preview = preview_snapshot_file(
+            &db,
+            snap_id,
+            "notes.txt",
+            Some(source_dir.path().to_str().unwrap()),
+        )
+        .unwrap();
+
+        assert_eq!(preview.relative_path, "notes.txt");
+        assert!(preview.is_text);
+        assert!(!preview.is_image);
+        assert!(!preview.too_large);
+        assert_eq!(
+            preview.snapshot_content.as_deref(),
+            Some("Original line 1\nOriginal line 2\n")
+        );
+        assert_eq!(
+            preview.current_content.as_deref(),
+            Some("Original line 1\nModified line 2\nAdded line 3\n")
+        );
+
+        // Preview image file
+        let img_preview = preview_snapshot_file(&db, snap_id, "test.png", None).unwrap();
+        assert!(img_preview.is_image);
+        assert!(!img_preview.is_text);
+        assert!(img_preview.snapshot_data_uri.is_some());
+        assert!(img_preview.snapshot_data_uri.unwrap().starts_with("data:image/png;base64,"));
+    }
 }

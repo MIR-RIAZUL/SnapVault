@@ -12,6 +12,7 @@ import type {
   SnapshotDiffItem,
   SnapshotDirEntry,
   SnapshotManifest,
+  FilePreviewResponse,
 } from "@/types/ipc";
 
 export async function pingDb(): Promise<PingDbResponse> {
@@ -68,4 +69,16 @@ export async function restoreEntry(input: RestoreEntryInput): Promise<RestoreRes
 
 export async function pruneSnapshots(jobId: number): Promise<PruneResult> {
   return await invoke<PruneResult>("prune_snapshots", { jobId });
+}
+
+export async function previewSnapshotFile(
+  snapshotId: number,
+  relPath: string,
+  currentSourceRoot?: string
+): Promise<FilePreviewResponse> {
+  return await invoke<FilePreviewResponse>("preview_snapshot_file", {
+    snapshotId,
+    relPath,
+    currentSourceRoot,
+  });
 }

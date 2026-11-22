@@ -114,25 +114,26 @@
 
 **Goal:** Users can browse any snapshot in a visual timeline, explore its file tree, compare file versions side-by-side, and restore individual files or entire folders with cryptographic verification.
 
-- [ ] File/folder restore from snapshots
-- [ ] Chunk reassembly with BLAKE3 verification
-- [ ] Visual timeline scrubber component
-- [ ] File explorer for snapshot browsing
-- [ ] Side-by-side diff viewer
-- [ ] Image preview comparison
-- [ ] Dashboard page
-- [ ] Tauri IPC wiring for restore/browse
-- [ ] Phase 3 Central Tester verification passed
-- [ ] Phase 3 Report generated
+- [x] File/folder restore from snapshots
+- [x] Chunk reassembly with BLAKE3 verification
+- [x] Visual timeline scrubber component
+- [x] File explorer for snapshot browsing
+- [x] Side-by-side diff viewer
+- [x] Image preview comparison
+- [x] Dashboard page
+- [x] Tauri IPC wiring for restore/browse
+- [x] Phase 3 Central Tester verification passed
+- [x] Phase 3 Report generated (`reports/PHASE_3_REPORT.md`)
 
 **Key Deliverables:**
-- `src-tauri/src/restore/` module with chunk reassembly and integrity verification
-- React timeline scrubber component with date navigation
-- Snapshot file browser (tree view with size, date, status columns)
-- Side-by-side text diff viewer and image comparison overlay
-- Dashboard showing backup status, last snapshot, next scheduled run
+- `src-tauri/src/restore/` module with chunk reassembly, memory preview, and integrity verification
+- React timeline scrubber component with zoom navigation and keyboard arrows
+- Snapshot file browser (tree view with breadcrumbs, status pills, show/hide deleted)
+- Side-by-side text diff viewer and image comparison overlay in slide-over drawer
+- Dashboard with 3-step setup wizard, KPI metrics, and live progress bar
+- Full Tauri dialog integration for native Windows folder selection
 
-**Exit Criteria:** A user can select any snapshot on the timeline, browse its contents, preview file differences, and restore a file/folder to a chosen location. Restored files are byte-identical to the originals (verified by BLAKE3).
+**Exit Criteria:** A user can select any snapshot on the timeline, browse its contents, preview file differences, and restore a file/folder to a chosen location. Restored files are byte-identical to the originals (verified by BLAKE3). All Phase 3 deliverables verified passing.
 
 ---
 
