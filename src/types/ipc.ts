@@ -197,3 +197,14 @@ export interface AppSettingsDto {
   notifications_enabled: boolean;
   theme: string;
 }
+
+export type LicenseState = "TRIAL_ACTIVE" | "TRIAL_EXPIRED" | "LICENSED";
+
+export interface LicenseStatusDto {
+  state: LicenseState;
+  is_licensed: boolean;
+  days_remaining: number;
+  first_run_at: string;
+  is_msix: boolean;
+  permanent_restore_unlocked: boolean;
+}

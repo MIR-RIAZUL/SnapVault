@@ -205,6 +205,8 @@ pub fn run_snapshot(
     db: State<'_, DatabaseManager>,
     job_id: i64,
 ) -> Result<SnapshotManifest, String> {
+    crate::licensing::verify_can_create_snapshot(&db).map_err(|e| e.to_string())?;
+
     execute_snapshot(&db, job_id, |prog: SnapshotProgress| {
         let _ = app.emit("snapshot-progress", &prog);
     })
@@ -463,4 +465,19 @@ pub fn save_app_settings(
         tx.commit()?;
         Ok(())
     }).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_license_status(
+    db: State<'_, DatabaseManager>,
+) -> Result<crate::licensing::LicenseStatusDto, String> {
+    crate::licensing::get_license_status(&db).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn activate_license_key(
+    db: State<'_, DatabaseManager>,
+    license_key: String,
+) -> Result<bool, String> {
+    crate::licensing::activate_license(&db, &license_key).map_err(|e| e.to_string())
 }

@@ -1,6 +1,6 @@
 [package]
 name = "snapvault"
-version = "0.1.0"
+version = "1.0.0"
 description = "100% offline, local-first Visual Backup Time Machine for Windows 11"
 authors = ["SnapVault Team"]
 edition = "2021"

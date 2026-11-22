@@ -16,6 +16,7 @@ import type {
   HealthCheckResult,
   HealthStatusSummary,
   AppSettingsDto,
+  LicenseStatusDto,
 } from "@/types/ipc";
 
 export async function pingDb(): Promise<PingDbResponse> {
@@ -116,4 +117,12 @@ export async function getAppSettings(): Promise<AppSettingsDto> {
 
 export async function saveAppSettings(settings: AppSettingsDto): Promise<void> {
   return await invoke<void>("save_app_settings", { settings });
+}
+
+export async function getLicenseStatus(): Promise<LicenseStatusDto> {
+  return await invoke<LicenseStatusDto>("get_license_status");
+}
+
+export async function activateLicenseKey(licenseKey: string): Promise<boolean> {
+  return await invoke<boolean>("activate_license_key", { licenseKey });
 }

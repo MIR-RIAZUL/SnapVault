@@ -25,16 +25,18 @@ import {
   getLatestHealthStatus,
   unlockTripwireSnapshot,
 } from "@/lib/ipc";
-import type { BackupJob, Snapshot, SnapshotProgress, HealthStatusSummary } from "@/types/ipc";
+import type { BackupJob, Snapshot, SnapshotProgress, HealthStatusSummary, LicenseStatusDto } from "@/types/ipc";
 
 interface DashboardProps {
   onOpenTimeMachine: (jobId: number) => void;
   onRefreshDrives?: () => void;
+  licenseStatus?: LicenseStatusDto | null;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
   onOpenTimeMachine,
   onRefreshDrives,
+  licenseStatus,
 }) => {
   const [jobs, setJobs] = useState<BackupJob[]>([]);
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
@@ -253,6 +255,36 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-3">
           <AlertTriangle className="w-5 h-5 text-rose-400 flex-shrink-0" />
           <span>{error}</span>
+        </div>
+      )}
+
+      {/* 14-DAY TRIAL EXPIRED BANNER & PERMANENT RESTORE GUARANTEE */}
+      {licenseStatus?.state === "TRIAL_EXPIRED" && (
+        <div className="p-6 rounded-2xl bg-gradient-to-r from-amber-500/15 via-slate-900 to-sky-950/40 border border-amber-500/30 text-slate-200 shadow-2xl space-y-3 animate-in fade-in">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-sm font-bold text-amber-300">
+                <ShieldCheck className="w-5 h-5 text-amber-400" />
+                <span>Your 14-Day Free Trial Has Ended — Permanent Restore Guarantee Active</span>
+              </div>
+              <p className="text-xs text-slate-300 leading-relaxed max-w-2xl">
+                Continuous snapshot creation is currently paused. Upgrade to{" "}
+                <span className="font-semibold text-white">SnapVault Pro ($19.99 one-time purchase)</span>{" "}
+                to unlock continuous automated backups forever with zero monthly subscriptions.
+              </p>
+            </div>
+            <a
+              href="https://apps.microsoft.com"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 transition-all flex-shrink-0"
+            >
+              Unlock SnapVault — $19.99
+            </a>
+          </div>
+          <div className="pt-2 border-t border-amber-500/20 flex items-center gap-2 text-[11px] text-amber-200/80 font-mono">
+            <span>🛡️ ZERO HOSTAGE GUARANTEE: All past snapshots, version browsing, and file restores remain 100% UNLOCKED and free forever.</span>
+          </div>
         </div>
       )}
 

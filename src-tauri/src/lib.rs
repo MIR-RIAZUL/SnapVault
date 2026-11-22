@@ -11,10 +11,11 @@ use db::{default_db_path, DatabaseManager};
 use platform::setup_tray;
 use watcher::{start_drive_watcher, WatcherState};
 use commands::{
-    browse_snapshot_dir_command, create_backup_job, diff_snapshot_files, get_app_settings,
-    get_latest_health_status, list_backup_jobs, list_drives, list_snapshots, pause_backups, ping_db,
-    preview_snapshot_file, prune_snapshots, register_drive, restore_entry, resume_backups,
-    run_health_check, run_snapshot, save_app_settings, toggle_plain_mirror, unlock_tripwire_snapshot,
+    activate_license_key, browse_snapshot_dir_command, create_backup_job, diff_snapshot_files,
+    get_app_settings, get_latest_health_status, get_license_status, list_backup_jobs, list_drives,
+    list_snapshots, pause_backups, ping_db, preview_snapshot_file, prune_snapshots, register_drive,
+    restore_entry, resume_backups, run_health_check, run_snapshot, save_app_settings,
+    toggle_plain_mirror, unlock_tripwire_snapshot,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -71,7 +72,9 @@ pub fn run() {
             pause_backups,
             resume_backups,
             get_app_settings,
-            save_app_settings
+            save_app_settings,
+            get_license_status,
+            activate_license_key
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

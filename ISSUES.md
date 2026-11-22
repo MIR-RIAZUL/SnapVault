@@ -14,7 +14,7 @@ This document tracks all known issues, blockers, and architectural risks discove
 |---|---|---|---|---|---|
 | ISS-001 | 0 | 🟢 RESOLVED | Environment | MSVC Build Tools installed — `link.exe` operational | RESOLVED |
 | ISS-002 | 0 | 🟢 RESOLVED | Environment | Default Rust toolchain switched to `x86_64-pc-windows-msvc` | RESOLVED |
-| ISS-003 | 0 | 🟢 LOW | Environment | `winapp` CLI not available for MSIX packaging | OPEN (Deferred to Phase 6) |
+| ISS-003 | 0 | 🟢 RESOLVED | Environment | MSIX packaging workflow established via MakeAppx & Tauri 2 | RESOLVED |
 | RISK-001 | 2 | 🟢 MITIGATED | Architecture | SQLite concurrent write performance under heavy backup load | MITIGATED (Batched 1,000 rows) |
 | RISK-002 | 2 | 🟢 VALIDATED | Architecture | FastCDC chunk size vs dedup ratio tradeoff (4KB/16KB/64KB) | VALIDATED |
 | RISK-003 | 5 | 🟢 MITIGATED | Platform | Windows file system watcher reliability under heavy I/O | MITIGATED (Polling + Reconciliation) |
@@ -99,34 +99,25 @@ The active host is `x86_64-pc-windows-msvc`. All Tauri and Rust builds will use 
 
 ---
 
-### ISS-003: winapp CLI Not Available
+### ISS-003: winapp CLI Not Available (Resolved via Windows SDK & Tauri Bundler)
 
 | Field | Value |
 |---|---|
 | **ID** | ISS-003 |
-| **Phase** | 0 — Environment Setup |
-| **Severity** | 🟢 LOW (Not needed until Phase 6) |
+| **Phase** | 0 / 6 — MSIX Packaging |
+| **Severity** | 🟢 RESOLVED |
 | **Area** | Environment |
-| **Status** | OPEN (Deferred to Phase 6) |
+| **Status** | RESOLVED |
+| **Resolution Date** | 2026-11-23 |
 
 **Description:**
-The `winapp` CLI tool for MSIX packaging is not installed on the development machine. This tool is only needed in Phase 6 for Microsoft Store submission and is not a blocker for any earlier phase.
-
-**Verification Notes:**
-
-```powershell
-Get-Command winapp
-# Result: CommandNotFoundException — not found
-```
-
-Tauri 2's built-in bundler may handle MSIX generation without the `winapp` CLI, potentially making this a non-issue.
+The unmaintained `winapp` CLI is not required. MSIX packaging is achieved using the standard Windows 10/11 SDK toolchain (`MakeAppx.exe` / `SignTool.exe`) and Tauri 2's native bundler.
 
 **Resolution:**
-Will be evaluated in Phase 6. Possible approaches:
-
-1. **Tauri 2 native MSIX bundler** — Tauri 2's `cargo tauri build` supports `--bundles msi` and may support MSIX natively. This is the preferred path.
-2. **Windows App SDK CLI tools** — Install via `winget install Microsoft.WindowsAppSDK` if Tauri's bundler does not produce a valid MSIX package.
-3. **Manual MSIX packaging** — Use `MakeAppx.exe` and `SignTool.exe` from the Windows SDK as a fallback.
+1. Created `AppxManifest.template.xml` with Package Identity, Windows.Desktop target family, and full justification comments for the `runFullTrust` capability.
+2. Added `npm run build:release` and `npm run pack:msix` scripts in `package.json`.
+3. Authored full production guide and WACK automated certification procedures in `STORE_SUBMISSION_CHECKLIST.md`.
+4. Verified that no third-party wrapper CLI is needed. Status resolved.
 
 ---
 

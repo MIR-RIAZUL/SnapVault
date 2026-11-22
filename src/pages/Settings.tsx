@@ -12,9 +12,13 @@ import {
   Plus,
   X,
   Save,
+  KeyRound,
+  ShieldCheck,
+  Info,
+  Sparkles,
 } from "lucide-react";
-import { getAppSettings, saveAppSettings } from "@/lib/ipc";
-import type { AppSettingsDto } from "@/types/ipc";
+import { getAppSettings, saveAppSettings, getLicenseStatus, activateLicenseKey } from "@/lib/ipc";
+import type { AppSettingsDto, LicenseStatusDto } from "@/types/ipc";
 
 const DEFAULT_PATTERNS = [
   "node_modules",
@@ -46,6 +50,16 @@ export const Settings: React.FC<SettingsProps> = ({ currentTheme, onThemeChange 
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // License State
+  const [license, setLicense] = useState<LicenseStatusDto | null>(null);
+  const [licenseKeyInput, setLicenseKeyInput] = useState("");
+  const [activating, setActivating] = useState(false);
+  const [activationMsg, setActivationMsg] = useState<string | null>(null);
+
+  const loadLicense = () => {
+    getLicenseStatus().then(setLicense).catch(() => null);
+  };
+
   useEffect(() => {
     getAppSettings()
       .then((s) => {
@@ -55,7 +69,28 @@ export const Settings: React.FC<SettingsProps> = ({ currentTheme, onThemeChange 
         }
       })
       .catch((err) => setError(String(err)));
+    loadLicense();
   }, []);
+
+  const handleActivate = async () => {
+    if (!licenseKeyInput.trim()) return;
+    setActivating(true);
+    setActivationMsg(null);
+    try {
+      const ok = await activateLicenseKey(licenseKeyInput.trim());
+      if (ok) {
+        setActivationMsg("License successfully activated! SnapVault Pro unlocked.");
+        setLicenseKeyInput("");
+        loadLicense();
+      } else {
+        setActivationMsg("Invalid license key format.");
+      }
+    } catch (err) {
+      setActivationMsg(`Activation failed: ${err}`);
+    } finally {
+      setActivating(false);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -353,6 +388,119 @@ export const Settings: React.FC<SettingsProps> = ({ currentTheme, onThemeChange 
           >
             Light Fluent
           </button>
+        </div>
+      </div>
+
+      {/* 6. License & Store Activation */}
+      <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <KeyRound className="w-4 h-4 text-sky-400" />
+              <h2 className="text-sm font-bold text-white tracking-tight">
+                Licensing & Microsoft Store Activation
+              </h2>
+            </div>
+            <p className="text-xs text-slate-400">
+              SnapVault is sold as a $19.99 one-time purchase with a 14-day free trial. Zero subscriptions.
+            </p>
+          </div>
+
+          <span
+            className={`px-3 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 ${
+              license?.is_licensed
+                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                : license?.state === "TRIAL_EXPIRED"
+                ? "bg-rose-500/10 text-rose-400 border border-rose-500/30"
+                : "bg-amber-500/10 text-amber-300 border border-amber-500/30"
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>
+              {license?.is_licensed
+                ? "Pro Lifetime Active"
+                : license?.state === "TRIAL_EXPIRED"
+                ? "Trial Expired"
+                : `Trial: ${license?.days_remaining ?? 14} Days Left`}
+            </span>
+          </span>
+        </div>
+
+        {/* Permanent Restore Guarantee Callout */}
+        <div className="p-3.5 bg-slate-950/60 rounded-xl border border-slate-800 flex items-start gap-3 text-xs">
+          <ShieldCheck className="w-4 h-4 text-sky-400 flex-shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <p className="font-semibold text-slate-200">
+              Permanent Restore Guarantee (Zero Hostage Policy)
+            </p>
+            <p className="text-slate-400 text-[11px] leading-relaxed">
+              Even if your 14-day trial expires, your ability to browse file histories on the Time
+              Machine timeline and restore any file or folder remains 100% free and unlocked forever.
+            </p>
+          </div>
+        </div>
+
+        {/* Activation Key Form (for Store / offline license keys) */}
+        {!license?.is_licensed && (
+          <div className="space-y-2 pt-1">
+            <label className="block text-xs font-medium text-slate-300">
+              Activate License Key
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={licenseKeyInput}
+                onChange={(e) => setLicenseKeyInput(e.target.value)}
+                placeholder="Enter SnapVault license key or Microsoft Store token..."
+                className="flex-1 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
+              />
+              <button
+                onClick={handleActivate}
+                disabled={activating || !licenseKeyInput.trim()}
+                className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-lg shadow-emerald-600/20 transition-all disabled:opacity-40"
+              >
+                {activating ? "Activating..." : "Activate"}
+              </button>
+            </div>
+            {activationMsg && (
+              <p className="text-xs text-emerald-400 font-medium">{activationMsg}</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* 7. About & Zero-Telemetry Privacy */}
+      <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Info className="w-4 h-4 text-sky-400" />
+            <h2 className="text-sm font-bold text-white tracking-tight">About SnapVault</h2>
+          </div>
+          <span className="text-xs font-mono text-slate-400 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">
+            v1.0.0 (Production Release)
+          </span>
+        </div>
+
+        <div className="p-4 bg-emerald-500/5 rounded-xl border border-emerald-500/20 space-y-2 text-xs">
+          <div className="flex items-center gap-2 font-semibold text-emerald-400">
+            <ShieldCheck className="w-4 h-4" />
+            <span>100% Offline — Zero Telemetry, Zero Cloud Lock-In Guarantee</span>
+          </div>
+          <p className="text-slate-300 leading-relaxed text-[11px]">
+            SnapVault is engineered to be 100% private. It connects to zero cloud services, transmits
+            zero telemetry, uses zero third-party analytics trackers, and requires no internet
+            connection. All file indexing, BLAKE3 cryptographic hashing, FastCDC deduplication, and
+            SQLite databases remain exclusively on your local PC and your personal USB drives.
+          </p>
+        </div>
+
+        <div className="text-[11px] text-slate-500 space-y-1 pt-1">
+          <p className="font-semibold text-slate-400">Core Technologies & Open-Source Attributions:</p>
+          <p>
+            Tauri 2 (Rust Desktop Shell) • FastCDC (Content-Defined Chunking) • BLAKE3 (Cryptographic Hashing) •
+            Rusqlite (Local WAL SQLite) • React 18 & TypeScript & Tailwind CSS • Lucide Icons
+          </p>
+          <p className="pt-1">© 2026 SnapVault. Designed for Windows 11.</p>
         </div>
       </div>
     </div>

@@ -11,6 +11,7 @@ import {
   Sparkles,
   Settings,
 } from "lucide-react";
+import type { LicenseStatusDto } from "@/types/ipc";
 
 export type NavTab = "dashboard" | "timemachine" | "jobs" | "activity" | "settings";
 
@@ -22,6 +23,7 @@ interface SidebarProps {
   theme: "dark" | "light";
   onToggleTheme: () => void;
   activeDrivesCount: number;
+  licenseStatus?: LicenseStatusDto | null;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -32,6 +34,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   theme,
   onToggleTheme,
   activeDrivesCount,
+  licenseStatus,
 }) => {
   const navItems: { id: NavTab; label: string; icon: React.ElementType; badge?: string }[] = [
     {
@@ -75,7 +78,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div className="flex items-center gap-1.5">
                 <span className="font-semibold text-sm text-white tracking-tight">SnapVault</span>
                 <span className="text-[10px] px-1.5 py-0.2 rounded font-medium bg-sky-500/20 text-sky-300 border border-sky-500/30">
-                  v0.1
+                  v1.0.0
                 </span>
               </div>
               <p className="text-[11px] text-slate-400">Windows 11 Time Machine</p>
@@ -125,13 +128,41 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Footer / System Health Section */}
       <div className="p-3.5 space-y-3 border-t border-slate-800/80 bg-slate-950/40">
-        {/* Trial Status Pill */}
+        {/* License & Trial Status Pill */}
         <div className="p-2.5 rounded-lg bg-slate-800/60 border border-slate-700/60 flex items-center justify-between text-xs">
           <div className="flex items-center space-x-2">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span className="text-slate-300 font-medium">Store Free Trial</span>
+            <Sparkles
+              className={`w-3.5 h-3.5 ${
+                licenseStatus?.is_licensed
+                  ? "text-emerald-400"
+                  : licenseStatus?.state === "TRIAL_EXPIRED"
+                  ? "text-rose-400"
+                  : "text-amber-400"
+              }`}
+            />
+            <span className="text-slate-300 font-medium">
+              {licenseStatus?.is_licensed
+                ? "SnapVault Pro"
+                : licenseStatus?.state === "TRIAL_EXPIRED"
+                ? "Trial Expired"
+                : "Store Free Trial"}
+            </span>
           </div>
-          <span className="text-[11px] text-amber-300 font-semibold">14 Days Left</span>
+          <span
+            className={`text-[11px] font-semibold ${
+              licenseStatus?.is_licensed
+                ? "text-emerald-300 font-mono"
+                : licenseStatus?.state === "TRIAL_EXPIRED"
+                ? "text-rose-300 font-medium"
+                : "text-amber-300"
+            }`}
+          >
+            {licenseStatus?.is_licensed
+              ? "Licensed"
+              : licenseStatus?.state === "TRIAL_EXPIRED"
+              ? "Restores Free"
+              : `${licenseStatus?.days_remaining ?? 14} Days Left`}
+          </span>
         </div>
 
         {/* Database & Drive Status */}

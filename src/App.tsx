@@ -5,8 +5,8 @@ import { TimeMachine } from "@/pages/TimeMachine";
 import { Jobs } from "@/pages/Jobs";
 import { ActivityLog } from "@/pages/ActivityLog";
 import { Settings } from "@/pages/Settings";
-import { pingDb, listBackupJobs, listDrives } from "@/lib/ipc";
-import type { BackupJob, Drive, PingDbResponse } from "@/types/ipc";
+import { pingDb, listBackupJobs, listDrives, getLicenseStatus } from "@/lib/ipc";
+import type { BackupJob, Drive, PingDbResponse, LicenseStatusDto } from "@/types/ipc";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<NavTab>("dashboard");
@@ -14,20 +14,23 @@ export default function App() {
   const [dbStatusOk, setDbStatusOk] = useState(true);
   const [jobs, setJobs] = useState<BackupJob[]>([]);
   const [drives, setDrives] = useState<Drive[]>([]);
+  const [licenseStatus, setLicenseStatus] = useState<LicenseStatusDto | null>(null);
   const [selectedJobId, setSelectedJobId] = useState<number | undefined>(undefined);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   const refreshAppData = async () => {
     try {
-      const [res, allJobs, allDrives] = await Promise.all([
+      const [res, allJobs, allDrives, license] = await Promise.all([
         pingDb(),
         listBackupJobs(),
         listDrives(),
+        getLicenseStatus().catch(() => null),
       ]);
       setDbData(res);
       setDbStatusOk(true);
       setJobs(allJobs);
       setDrives(allDrives);
+      setLicenseStatus(license);
       if (allJobs.length > 0 && selectedJobId === undefined) {
         setSelectedJobId(allJobs[0].id);
       }
@@ -67,6 +70,7 @@ export default function App() {
         theme={theme}
         onToggleTheme={handleToggleTheme}
         activeDrivesCount={drives.length}
+        licenseStatus={licenseStatus}
       />
 
       {/* Main View Area */}
@@ -75,6 +79,7 @@ export default function App() {
           <Dashboard
             onOpenTimeMachine={handleOpenTimeMachine}
             onRefreshDrives={refreshAppData}
+            licenseStatus={licenseStatus}
           />
         )}
 
