@@ -12,8 +12,8 @@ This document tracks all known issues, blockers, and architectural risks discove
 
 | ID | Phase | Severity | Area | Description | Status |
 |---|---|---|---|---|---|
-| ISS-001 | 0 | 🔴 CRITICAL | Environment | MSVC Build Tools not installed — `link.exe` linker missing | OPEN |
-| ISS-002 | 0 | 🟠 HIGH | Environment | Default Rust toolchain is GNU, not MSVC | OPEN (blocked by ISS-001) |
+| ISS-001 | 0 | 🟢 RESOLVED | Environment | MSVC Build Tools installed — `link.exe` operational | RESOLVED |
+| ISS-002 | 0 | 🟢 RESOLVED | Environment | Default Rust toolchain switched to `x86_64-pc-windows-msvc` | RESOLVED |
 | ISS-003 | 0 | 🟢 LOW | Environment | `winapp` CLI not available for MSIX packaging | OPEN (Deferred to Phase 6) |
 | RISK-001 | 2 | 🟡 MEDIUM | Architecture | SQLite concurrent write performance under heavy backup load | MONITORING |
 | RISK-002 | 2 | 🟢 LOW | Architecture | FastCDC chunk size vs dedup ratio tradeoff needs tuning | MONITORING |
@@ -51,53 +51,22 @@ This document tracks all known issues, blockers, and architectural risks discove
 |---|---|
 | **ID** | ISS-001 |
 | **Phase** | 0 — Environment Setup |
-| **Severity** | 🔴 CRITICAL (Blocker for Phase 1) |
+| **Severity** | 🟢 RESOLVED |
 | **Area** | Environment |
-| **Status** | OPEN |
-| **Blocks** | ISS-002, Phase 1 (Project Scaffold) |
+| **Status** | RESOLVED |
+| **Resolution Date** | 2026-11-23 |
 
 **Description:**
-Visual Studio C++ Build Tools (MSVC) are not installed on the development machine. The `link.exe` linker is missing. Tauri 2 on Windows requires the MSVC target (`x86_64-pc-windows-msvc`) with the MSVC linker for production builds. The `stable-x86_64-pc-windows-msvc` toolchain is installed via rustup but cannot link without the Visual Studio Build Tools runtime.
+Visual Studio C++ Build Tools (MSVC) were installed and `link.exe` is now fully operational.
 
 **Verification Notes:**
-Tested by compiling a minimal Rust program with the MSVC toolchain:
-
+Tested by compiling and linking a test Rust program with `rustc`:
 ```powershell
-rustup run stable-x86_64-pc-windows-msvc rustc main.rs
+rustc main.rs -o test.exe
+.\test.exe
+# Output: "MSVC linker operational!" (Exit code: 0)
 ```
-
-Result: **fails with `linker 'link.exe' not found`**.
-
-The GNU toolchain (`stable-x86_64-pc-windows-gnu`) compiles and links successfully, confirming the issue is isolated to the missing MSVC linker and libraries. The GNU toolchain is not suitable for Tauri Windows builds because:
-
-- Tauri 2 requires MSVC for proper Windows API integration.
-- MSIX packaging targets the MSVC ABI.
-- WebView2 embedding depends on MSVC-compatible object files.
-
-**Resolution:**
-Install Visual Studio 2022 Build Tools with the "Desktop development with C++" workload. Use one of the following methods:
-
-**Option A — winget (recommended):**
-
-```powershell
-winget install Microsoft.VisualStudio.2022.BuildTools --override "--wait --passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
-```
-
-**Option B — Manual download:**
-Download the installer from [https://visualstudio.microsoft.com/visual-cpp-build-tools/](https://visualstudio.microsoft.com/visual-cpp-build-tools/) and select the "Desktop development with C++" workload during installation.
-
-**Post-installation**, set the default Rust toolchain to MSVC:
-
-```powershell
-rustup default stable-x86_64-pc-windows-msvc
-```
-
-**Verification command** (run after installation):
-
-```powershell
-rustup run stable-x86_64-pc-windows-msvc rustc -vV
-# Should show host: x86_64-pc-windows-msvc without linker errors
-```
+Compilation and link succeeded with 0 errors.
 
 ---
 
@@ -107,45 +76,26 @@ rustup run stable-x86_64-pc-windows-msvc rustc -vV
 |---|---|
 | **ID** | ISS-002 |
 | **Phase** | 0 — Environment Setup |
-| **Severity** | 🟠 HIGH |
+| **Severity** | 🟢 RESOLVED |
 | **Area** | Environment |
-| **Status** | OPEN (blocked by ISS-001) |
-| **Depends On** | ISS-001 |
+| **Status** | RESOLVED |
+| **Resolution Date** | 2026-11-23 |
 
 **Description:**
-The default Rust toolchain is `stable-x86_64-pc-windows-gnu` but Tauri 2 on Windows requires `stable-x86_64-pc-windows-msvc` for proper Windows API integration, MSIX packaging, and WebView2 embedding. All `cargo build` and `cargo tauri build` commands will use the wrong ABI until the default is switched.
+The active and default Rust toolchain was switched to `stable-x86_64-pc-windows-msvc`.
 
 **Verification Notes:**
-`rustup show` confirms the current default:
-
+`rustc -vV` verification output:
+```text
+rustc 1.99.1 (58cf8f9c3 2026-10-13)
+binary: rustc
+commit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67
+commit-date: 2026-10-13
+host: x86_64-pc-windows-msvc
+release: 1.99.1
+LLVM version: 23.1.1
 ```
-Default host: x86_64-pc-windows-gnu
-
-installed toolchains
---------------------
-stable-x86_64-pc-windows-gnu (default)
-stable-x86_64-pc-windows-msvc
-
-active toolchain
-----------------
-stable-x86_64-pc-windows-gnu (default)
-```
-
-The MSVC toolchain is installed but non-functional without Visual Studio Build Tools (see ISS-001).
-
-**Resolution:**
-After ISS-001 is resolved, switch the default toolchain:
-
-```powershell
-rustup default stable-x86_64-pc-windows-msvc
-```
-
-**Verification command:**
-
-```powershell
-rustup show
-# Default host should now show: x86_64-pc-windows-msvc
-```
+The active host is `x86_64-pc-windows-msvc`. All Tauri and Rust builds will use the MSVC ABI.
 
 ---
 
@@ -312,6 +262,8 @@ Test 3: Monitor a network drive — verify polling fallback activates automatica
 
 | Date | ID | Change |
 |---|---|---|
+| 2026-11-23 | ISS-001 | RESOLVED — Visual Studio C++ Build Tools installed, link.exe operational |
+| 2026-11-23 | ISS-002 | RESOLVED — Default Rust toolchain switched to x86_64-pc-windows-msvc |
 | 2025-07-14 | ISS-001 | Logged during Phase 0 environment check. MSVC Build Tools missing. |
 | 2025-07-14 | ISS-002 | Logged during Phase 0 environment check. GNU toolchain is default. |
 | 2025-07-14 | ISS-003 | Logged during Phase 0 environment check. Deferred to Phase 6. |

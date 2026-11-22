@@ -1,0 +1,31 @@
+[package]
+name = "snapvault"
+version = "0.1.0"
+description = "100% offline, local-first Visual Backup Time Machine for Windows 11"
+authors = ["SnapVault Team"]
+edition = "2021"
+
+[lib]
+name = "snapvault_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.2", features = [] }
+
+[dependencies]
+tauri = { version = "2.2", features = [] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+rusqlite = { version = "0.32", features = ["bundled"] }
+blake3 = "1.5"
+fastcdc = "1.0"
+walkdir = "2.5"
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2.0"
+uuid = { version = "1.11", features = ["v4"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
