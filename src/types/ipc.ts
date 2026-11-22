@@ -149,3 +149,41 @@ export interface FilePreviewResponse {
   snapshot_data_uri?: string | null;
   current_data_uri?: string | null;
 }
+
+export interface FailedFileDetail {
+  path: string;
+  expected_hash: string;
+  actual_hash?: string;
+  error: string;
+}
+
+export interface HealthCheckResult {
+  id: number;
+  job_id: number;
+  snapshot_id: number;
+  ran_at: string;
+  files_tested: number;
+  bytes_tested: number;
+  files_passed: number;
+  files_failed: number;
+  failed_details: FailedFileDetail[];
+  duration_ms: number;
+  status: "PASS" | "DEGRADED" | "FAIL";
+}
+
+export interface HealthStatusSummary {
+  has_checked: boolean;
+  latest_check?: HealthCheckResult | null;
+  is_stale: boolean;
+  days_since_last_backup?: number | null;
+}
+
+export interface TripwireAlertPayload {
+  triggered: boolean;
+  total_files_previous: number;
+  files_deleted: number;
+  files_modified: number;
+  volatility_percentage: number;
+  previous_snapshot_id?: number | null;
+  message: string;
+}

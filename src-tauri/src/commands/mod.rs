@@ -6,12 +6,18 @@ use uuid::Uuid;
 
 use crate::db::models::{BackupJob, Drive, Snapshot};
 use crate::db::DatabaseManager;
+use crate::engine::health::{
+    get_latest_health_status as engine_get_latest_health_status,
+    run_health_check as engine_run_health_check, HealthCheckResult, HealthStatusSummary,
+};
 use crate::engine::prune::{prune_and_garbage_collect, PruneResult};
 use crate::engine::restore::{
     browse_snapshot_dir, diff_snapshots, preview_snapshot_file as engine_preview_snapshot_file,
     restore_from_snapshot, FilePreviewResponse, RestoreResult, SnapshotDiffItem, SnapshotDirEntry,
 };
 use crate::engine::snapshot::{execute_snapshot, SnapshotManifest, SnapshotProgress};
+use crate::engine::tripwire::unlock_snapshot as engine_unlock_snapshot;
+use crate::watcher::WatcherState;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct PingDbResponse {
@@ -296,4 +302,88 @@ pub fn preview_snapshot_file(
 ) -> Result<FilePreviewResponse, String> {
     engine_preview_snapshot_file(&db, snapshot_id, &rel_path, current_source_root.as_deref())
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn run_health_check(
+    app: AppHandle,
+    db: State<'_, DatabaseManager>,
+    job_id: i64,
+) -> Result<HealthCheckResult, String> {
+    let res = engine_run_health_check(&db, job_id).map_err(|e| e.to_string())?;
+
+    if res.status == "PASS" {
+        crate::platform::dispatch_toast(
+            &app,
+            "SnapVault Proof-of-Restore",
+            "All sample files verified 100% restorable via cryptographic BLAKE3 hashes.",
+        );
+    } else {
+        crate::platform::dispatch_toast(
+            &app,
+            "SnapVault Integrity Warning",
+            &format!("Proof-of-restore drill detected issues (status: {}).", res.status),
+        );
+    }
+
+    Ok(res)
+}
+
+#[tauri::command]
+pub fn get_latest_health_status(
+    app: AppHandle,
+    db: State<'_, DatabaseManager>,
+    job_id: i64,
+) -> Result<HealthStatusSummary, String> {
+    let summary = engine_get_latest_health_status(&db, job_id).map_err(|e| e.to_string())?;
+    if summary.is_stale {
+        crate::platform::dispatch_toast(
+            &app,
+            "Backup Staleness Alert",
+            "This backup has not completed in over 7 days. Please connect your backup drive.",
+        );
+    }
+    Ok(summary)
+}
+
+#[tauri::command]
+pub fn unlock_tripwire_snapshot(
+    db: State<'_, DatabaseManager>,
+    snapshot_id: i64,
+) -> Result<(), String> {
+    engine_unlock_snapshot(&db, snapshot_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn toggle_plain_mirror(
+    db: State<'_, DatabaseManager>,
+    job_id: i64,
+    enable: bool,
+) -> Result<bool, String> {
+    let val = if enable { 1 } else { 0 };
+    db.with_conn_mut(|conn| {
+        conn.execute(
+            "UPDATE backup_jobs SET enable_emergency_mirror = ?1 WHERE id = ?2;",
+            params![val, job_id],
+        )?;
+        Ok(())
+    })
+    .map_err(|e| e.to_string())?;
+    Ok(enable)
+}
+
+#[tauri::command]
+pub fn pause_backups(
+    state: State<'_, WatcherState>,
+) -> Result<(), String> {
+    state.set_paused(true);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn resume_backups(
+    state: State<'_, WatcherState>,
+) -> Result<(), String> {
+    state.set_paused(false);
+    Ok(())
 }

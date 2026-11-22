@@ -265,7 +265,86 @@ where
     }
     fs::rename(&temp_manifest_path, &target_manifest_path)?;
 
-    // 6. Update snapshot status to COMMITTED in SQLite
+    // 6. Compute diff against previous committed snapshot for tripwire & statistics
+    let (files_modified, files_deleted, prev_snap_id) = {
+        let prev_files = db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT s.id FROM snapshots s 
+                 WHERE s.job_id = ?1 AND s.status = 'COMMITTED' AND s.id != ?2
+                 ORDER BY s.started_at DESC LIMIT 1;",
+            )?;
+            let mut rows = stmt.query(params![job_id, snapshot_id])?;
+            if let Some(r) = rows.next()? {
+                let p_id: i64 = r.get(0)?;
+                let mut fstmt = conn.prepare(
+                    "SELECT relative_path, file_blake3_hash FROM file_entries WHERE snapshot_id = ?1 AND is_deleted = 0;",
+                )?;
+                let frows = fstmt.query_map(params![p_id], |frow| {
+                    Ok((frow.get::<_, String>(0)?, frow.get::<_, String>(1)?))
+                })?;
+                let mut map = std::collections::HashMap::new();
+                for fr in frows {
+                    let (p, h) = fr?;
+                    map.insert(p, h);
+                }
+                Ok((Some(p_id), map))
+            } else {
+                Ok((None, std::collections::HashMap::new()))
+            }
+        })?;
+
+        let (p_id, prev_map) = prev_files;
+        if prev_map.is_empty() {
+            (0i64, 0i64, p_id)
+        } else {
+            let mut current_map = std::collections::HashMap::new();
+            for m in &manifest.files {
+                current_map.insert(m.relative_path.clone(), m.file_blake3_hash.clone());
+            }
+
+            let mut deleted = 0i64;
+            let mut modified = 0i64;
+
+            for (p, old_hash) in &prev_map {
+                if let Some(new_hash) = current_map.get(p) {
+                    if new_hash != old_hash {
+                        modified += 1;
+                    }
+                } else {
+                    deleted += 1;
+                }
+            }
+            (modified, deleted, p_id)
+        }
+    };
+
+    // 7. Evaluate Tripwire
+    let tripwire_triggered = if prev_snap_id.is_some() {
+        let tripwire_eval = crate::engine::tripwire::evaluate_tripwire_safety_brake(
+            db,
+            job_id,
+            files_deleted,
+            files_modified,
+        )?;
+        tripwire_eval.triggered
+    } else {
+        false
+    };
+
+    // 8. Plain-File Emergency Mirror check
+    let enable_mirror = db.with_conn(|conn| {
+        let mut stmt = conn.prepare("SELECT enable_emergency_mirror FROM backup_jobs WHERE id = ?1;")?;
+        let res: i64 = stmt.query_row(params![job_id], |r| r.get(0))?;
+        Ok(res == 1)
+    })?;
+
+    if enable_mirror {
+        let file_paths: Vec<String> = manifest.files.iter().map(|f| f.relative_path.clone()).collect();
+        let src_path = std::path::Path::new(&source_path_str);
+        let _ = crate::engine::mirror::sync_plain_file_mirror(&dest_root, src_path, &file_paths);
+    }
+
+    // 9. Update snapshot status to COMMITTED in SQLite
     db.with_conn_mut(|conn| {
         let tx = conn.transaction()?;
         tx.execute(
@@ -275,14 +354,20 @@ where
                 total_files = ?2,
                 total_bytes = ?3,
                 new_chunks_count = ?4,
-                new_bytes_stored = ?5
-             WHERE id = ?6;",
+                new_bytes_stored = ?5,
+                files_modified = ?6,
+                files_deleted = ?7,
+                tripwire_triggered = ?8
+             WHERE id = ?9;",
             params![
                 completed_at,
                 files_processed as i64,
                 bytes_processed as i64,
                 total_new_chunks as i64,
                 total_new_bytes as i64,
+                files_modified,
+                files_deleted,
+                if tripwire_triggered { 1 } else { 0 },
                 snapshot_id
             ],
         )?;

@@ -8,6 +8,7 @@ import {
   Scissors,
   CheckCircle2,
   AlertTriangle,
+  Copy,
 } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
@@ -17,6 +18,7 @@ import {
   registerDrive,
   runSnapshot,
   pruneSnapshots,
+  togglePlainMirror,
 } from "@/lib/ipc";
 import type { BackupJob, Drive, PruneResult } from "@/types/ipc";
 
@@ -34,6 +36,7 @@ export const Jobs: React.FC<JobsProps> = ({ onRefreshDrives }) => {
   const [runningJobId, setRunningJobId] = useState<number | null>(null);
   const [pruningJobId, setPruningJobId] = useState<number | null>(null);
   const [pruneResult, setPruneResult] = useState<PruneResult | null>(null);
+  const [togglingMirrorJobId, setTogglingMirrorJobId] = useState<number | null>(null);
 
   // New Job Modal state
   const [showNewJobModal, setShowNewJobModal] = useState(false);
@@ -84,6 +87,18 @@ export const Jobs: React.FC<JobsProps> = ({ onRefreshDrives }) => {
       alert(`Pruning failed: ${err}`);
     } finally {
       setPruningJobId(null);
+    }
+  };
+
+  const handleToggleMirror = async (jobId: number, currentEnabled: boolean) => {
+    setTogglingMirrorJobId(jobId);
+    try {
+      await togglePlainMirror(jobId, !currentEnabled);
+      await loadData();
+    } catch (err) {
+      alert(`Failed to update emergency mirror: ${err}`);
+    } finally {
+      setTogglingMirrorJobId(null);
     }
   };
 
@@ -259,6 +274,49 @@ export const Jobs: React.FC<JobsProps> = ({ onRefreshDrives }) => {
                     <span>{runningJobId === job.id ? "Running..." : "Back Up Now"}</span>
                   </button>
                 </div>
+              </div>
+
+              {/* Emergency Plain-File Mirror Control */}
+              <div className="p-4 bg-slate-950/70 rounded-xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Copy className="w-4 h-4 text-sky-400" />
+                    <span className="font-semibold text-slate-200">
+                      Emergency Plain-File Mirror (Zero-Tool Recovery)
+                    </span>
+                    {job.enable_emergency_mirror ? (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        Enabled
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 text-slate-400 border border-slate-700">
+                        Disabled
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-slate-400 text-[11px]">
+                    Maintains an uncompressed, 1:1 readable mirror in{" "}
+                    <span className="font-mono text-slate-300">
+                      {destDrive ? `${destDrive.mount_path}\\SnapVault_Latest_Readable\\` : "SnapVault_Latest_Readable\\"}
+                    </span>{" "}
+                    for immediate zero-tool access without SnapVault installed.
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleToggleMirror(job.id, job.enable_emergency_mirror)}
+                  disabled={togglingMirrorJobId === job.id}
+                  className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                    job.enable_emergency_mirror
+                      ? "bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border-rose-500/30"
+                      : "bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border-sky-500/30"
+                  } disabled:opacity-50`}
+                >
+                  {togglingMirrorJobId === job.id
+                    ? "Updating..."
+                    : job.enable_emergency_mirror
+                    ? "Disable Mirror"
+                    : "Enable Mirror"}
+                </button>
               </div>
 
               {/* GFS Retention Explainer Pill */}

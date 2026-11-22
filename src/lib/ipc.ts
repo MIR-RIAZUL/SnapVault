@@ -13,6 +13,8 @@ import type {
   SnapshotDirEntry,
   SnapshotManifest,
   FilePreviewResponse,
+  HealthCheckResult,
+  HealthStatusSummary,
 } from "@/types/ipc";
 
 export async function pingDb(): Promise<PingDbResponse> {
@@ -81,4 +83,28 @@ export async function previewSnapshotFile(
     relPath,
     currentSourceRoot,
   });
+}
+
+export async function runHealthCheck(jobId: number): Promise<HealthCheckResult> {
+  return await invoke<HealthCheckResult>("run_health_check", { jobId });
+}
+
+export async function getLatestHealthStatus(jobId: number): Promise<HealthStatusSummary> {
+  return await invoke<HealthStatusSummary>("get_latest_health_status", { jobId });
+}
+
+export async function unlockTripwireSnapshot(snapshotId: number): Promise<void> {
+  return await invoke<void>("unlock_tripwire_snapshot", { snapshotId });
+}
+
+export async function togglePlainMirror(jobId: number, enable: boolean): Promise<boolean> {
+  return await invoke<boolean>("toggle_plain_mirror", { jobId, enable });
+}
+
+export async function pauseBackups(): Promise<void> {
+  return await invoke<void>("pause_backups");
+}
+
+export async function resumeBackups(): Promise<void> {
+  return await invoke<void>("resume_backups");
 }

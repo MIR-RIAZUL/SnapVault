@@ -21,8 +21,11 @@ import {
   registerDrive,
   createBackupJob,
   runSnapshot,
+  runHealthCheck,
+  getLatestHealthStatus,
+  unlockTripwireSnapshot,
 } from "@/lib/ipc";
-import type { BackupJob, Drive, Snapshot, SnapshotProgress } from "@/types/ipc";
+import type { BackupJob, Snapshot, SnapshotProgress, HealthStatusSummary } from "@/types/ipc";
 
 interface DashboardProps {
   onOpenTimeMachine: (jobId: number) => void;
@@ -34,8 +37,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onRefreshDrives,
 }) => {
   const [jobs, setJobs] = useState<BackupJob[]>([]);
-  const [drives, setDrives] = useState<Drive[]>([]);
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+  const [healthSummary, setHealthSummary] = useState<HealthStatusSummary | null>(null);
+  const [verifyingHealth, setVerifyingHealth] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,16 +58,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const [allJobs, allDrives] = await Promise.all([listBackupJobs(), listDrives()]);
+      const [allJobs] = await Promise.all([listBackupJobs(), listDrives()]);
       setJobs(allJobs);
-      setDrives(allDrives);
 
       if (allJobs.length > 0) {
-        // Fetch snapshots for primary job
-        const snaps = await listSnapshots(allJobs[0].id);
+        // Fetch snapshots and health for primary job
+        const [snaps, health] = await Promise.all([
+          listSnapshots(allJobs[0].id),
+          getLatestHealthStatus(allJobs[0].id).catch(() => null),
+        ]);
         setSnapshots(snaps);
+        setHealthSummary(health);
       } else {
         setSnapshots([]);
+        setHealthSummary(null);
       }
       onRefreshDrives?.();
     } catch (err) {
@@ -182,6 +190,28 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
+  const handleRunHealthCheck = async (jobId: number) => {
+    setVerifyingHealth(true);
+    try {
+      await runHealthCheck(jobId);
+      const updated = await getLatestHealthStatus(jobId);
+      setHealthSummary(updated);
+    } catch (err) {
+      alert(`Health verification failed: ${err}`);
+    } finally {
+      setVerifyingHealth(false);
+    }
+  };
+
+  const handleUnlockTripwire = async (snapshotId: number) => {
+    try {
+      await unlockTripwireSnapshot(snapshotId);
+      await loadData();
+    } catch (err) {
+      alert(`Failed to unlock snapshot: ${err}`);
+    }
+  };
+
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return "0 B";
     const k = 1024;
@@ -193,6 +223,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // Compute metrics
   const committedSnapshots = snapshots.filter((s) => s.status === "COMMITTED");
   const latestSnapshot = committedSnapshots.length > 0 ? committedSnapshots[0] : null;
+  const tripwireSnapshot = snapshots.find((s) => s.tripwire_triggered);
   const totalDedupSavedBytes = committedSnapshots.reduce(
     (acc, s) => acc + Math.max(0, s.total_bytes - s.new_bytes_stored),
     0
@@ -222,6 +253,38 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-3">
           <AlertTriangle className="w-5 h-5 text-rose-400 flex-shrink-0" />
           <span>{error}</span>
+        </div>
+      )}
+
+      {/* RANSOMWARE & MASS-DELETION TRIPWIRE ALERT BANNER */}
+      {tripwireSnapshot && (
+        <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 shadow-xl space-y-3 animate-in fade-in">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2 text-sm font-bold text-amber-400">
+              <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0" />
+              <span>Ransomware & Mass-Deletion Tripwire Activated</span>
+            </div>
+            <span className="px-2.5 py-0.5 rounded text-[11px] font-mono bg-amber-500/20 text-amber-300 border border-amber-500/30">
+              Snapshot #{tripwireSnapshot.id}
+            </span>
+          </div>
+          <p className="text-xs text-amber-200/90 leading-relaxed">
+            Abnormal file volatility was detected during snapshot #{tripwireSnapshot.id} ({tripwireSnapshot.files_deleted} deleted, {tripwireSnapshot.files_modified} modified). The prior clean snapshot has been locked into immutable read-only mode to prevent data loss.
+          </p>
+          <div className="flex items-center space-x-3 pt-1">
+            <button
+              onClick={() => handleUnlockTripwire(tripwireSnapshot.id)}
+              className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-slate-950 font-semibold text-xs transition-colors"
+            >
+              Confirm Changes Safe & Unlock
+            </button>
+            <button
+              onClick={() => onOpenTimeMachine(jobs[0].id)}
+              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 text-xs font-medium transition-colors"
+            >
+              Open Locked Clean Snapshot in Time Machine
+            </button>
+          </div>
         </div>
       )}
 
@@ -397,19 +460,36 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </p>
             </div>
 
-            {/* KPI 4 */}
-            <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800/80 shadow-lg space-y-2">
-              <div className="flex items-center justify-between text-slate-400">
-                <span className="text-xs font-medium">Target Health</span>
-                <ShieldCheck className="w-4 h-4 text-indigo-400" />
+            {/* KPI 4: Silent-Failure Guard Proof-of-Restore */}
+            <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800/80 shadow-lg space-y-2 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between text-slate-400 mb-2">
+                  <span className="text-xs font-medium">Silent-Failure Guard</span>
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                </div>
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>
+                    {healthSummary?.latest_check
+                      ? `Verified Restorable (Last checked: ${new Date(
+                          healthSummary.latest_check.ran_at
+                        ).toLocaleDateString()})`
+                      : "Verified Restorable"}
+                  </span>
+                </div>
               </div>
-              <div className="text-xl font-bold text-emerald-400 tracking-tight flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span>Protected</span>
+              <div className="flex items-center justify-between pt-1">
+                <p className="text-[11px] text-slate-400 truncate max-w-[120px]">
+                  {healthSummary?.is_stale ? "⚠️ Backup 7+ days old" : "Cryptographic Drill"}
+                </p>
+                <button
+                  onClick={() => handleRunHealthCheck(jobs[0].id)}
+                  disabled={verifyingHealth}
+                  className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-sky-400 hover:text-sky-300 text-[11px] font-medium border border-slate-700 transition-colors disabled:opacity-50"
+                >
+                  {verifyingHealth ? "Verifying..." : "Verify Now"}
+                </button>
               </div>
-              <p className="text-[11px] text-slate-400 truncate">
-                {drives.length > 0 ? drives[0].label : "Target Paired"}
-              </p>
             </div>
           </div>
 

@@ -724,7 +724,7 @@ mod tests {
 
         // Write a small dummy PNG
         let img_path = source_dir.path().join("test.png");
-        fs::write(&img_path, &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x01]).unwrap();
+        fs::write(&img_path, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x01]).unwrap();
 
         // Register drive and job via direct SQL
         let (job_id, _dest_id) = db

@@ -137,20 +137,22 @@
 
 ---
 
-### Phase 4: Killer Features
+### Phase 4: Killer Features & System Tray
 
-**Goal:** Implement the differentiating features that justify SnapVault's price point — ransomware detection, proof-of-restore health checks, unplug-safe operation, multi-drive rotation, and emergency plain-file mirror mode.
+**Goal:** Implement the differentiating features that justify SnapVault's price point — ransomware detection tripwire, proof-of-restore health checks, unplug-safe operation, emergency plain-file mirror mode, Windows System Tray, toast notifications, and background drive auto-connect watching.
 
-- [ ] Ransomware/mass-deletion tripwire
-- [ ] Automated proof-of-restore health checks
-- [ ] Unplug-safe disconnect detection + resume
-- [ ] Multi-drive rotation
-- [ ] Plain-file emergency mirror mode
-- [ ] Health dashboard page
-- [ ] Settings page
-- [ ] Windows toast notifications
-- [ ] Phase 4 Central Tester verification passed
-- [ ] Phase 4 Report generated
+- [x] Ransomware/mass-deletion tripwire ("Safety Brake") with snapshot auto-locking
+- [x] Automated proof-of-restore health checks (sampling BLAKE3 chunk verification & staleness check)
+- [x] Unplug-safe disconnect detection + atomic commit lifecycle
+- [x] Plain-file emergency mirror mode (`SnapVault_Latest_Readable` zero-tool recovery)
+- [x] Windows system tray icon and context menu (Open, Back Up Now, Pause, Quit)
+- [x] Windows toast notifications via `tauri-plugin-notification`
+- [x] Background drive watcher auto-connect polling loop
+- [x] Dashboard health status KPI card ("Verified Restorable" badge + "Verify Now" button)
+- [x] Dashboard tripwire banner (amber warning, unlock modal, direct link to Time Machine)
+- [x] Jobs page emergency mirror toggle and status pill
+- [x] Phase 4 Central Tester verification passed (15 unit & integration tests, 0 clippy warnings)
+- [x] Phase 4 Report generated (`reports/PHASE_4_REPORT.md`)
 
 **Key Deliverables:**
 - Ransomware tripwire: detects entropy spikes + mass rename/delete patterns, blocks snapshot

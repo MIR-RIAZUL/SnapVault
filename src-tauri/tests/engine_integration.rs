@@ -5,6 +5,8 @@ use chrono::{Duration, Utc};
 use rusqlite::params;
 
 use snapvault_lib::db::DatabaseManager;
+use snapvault_lib::engine::chunker::get_chunk_absolute_path;
+use snapvault_lib::engine::health::run_health_check;
 use snapvault_lib::engine::prune::prune_and_garbage_collect;
 use snapvault_lib::engine::restore::{
     browse_snapshot_dir, diff_snapshots, restore_from_snapshot, DiffKind,
@@ -318,4 +320,175 @@ fn test_4_gfs_pruning_and_orphan_chunk_gc() {
         Ok(count == 1)
     }).unwrap();
     assert!(snap3_exists, "Recent snapshot 3 must be retained");
+}
+
+#[test]
+fn test_5_proof_of_restore_health_check_clean_and_corrupt() {
+    let source_temp = tempdir().expect("source tempdir");
+    let dest_temp = tempdir().expect("dest tempdir");
+    let db_temp = tempdir().expect("db tempdir");
+
+    let db_path = db_temp.path().join("test.db");
+    let db = DatabaseManager::new(&db_path).expect("db init");
+
+    let source_dir = source_temp.path();
+    let dest_dir = dest_temp.path();
+
+    let (_dest_id, job_id) = setup_test_job(
+        &db,
+        &source_dir.to_string_lossy(),
+        &dest_dir.to_string_lossy(),
+    );
+
+    // Create 5 files
+    for i in 1..=5 {
+        fs::write(
+            source_dir.join(format!("file_{}.txt", i)),
+            format!("Content of test file number {}", i).as_bytes(),
+        ).unwrap();
+    }
+
+    let _snap = execute_snapshot(&db, job_id, |_| {}).expect("snap");
+
+    // 1. Clean health check
+    let clean_res = run_health_check(&db, job_id).expect("health check");
+    assert_eq!(clean_res.status, "PASS");
+    assert_eq!(clean_res.files_tested, 5);
+    assert_eq!(clean_res.files_passed, 5);
+    assert_eq!(clean_res.files_failed, 0);
+
+    // 2. Corrupt one chunk file intentionally
+    let chunk_hash: String = db.with_conn(|conn| {
+        let mut stmt = conn.prepare("SELECT chunk_hash FROM chunks LIMIT 1;")?;
+        let h: String = stmt.query_row([], |r| r.get(0))?;
+        Ok(h)
+    }).unwrap();
+
+    let chunk_file = get_chunk_absolute_path(dest_dir, &chunk_hash);
+    assert!(chunk_file.exists());
+    fs::write(&chunk_file, b"GARBAGE CORRUPTED BYTES").unwrap();
+
+    // 3. Corrupted health check
+    let corrupt_res = run_health_check(&db, job_id).expect("corrupt check");
+    assert!(corrupt_res.status == "DEGRADED" || corrupt_res.status == "FAIL");
+    assert!(corrupt_res.files_failed >= 1);
+    assert!(!corrupt_res.failed_details.is_empty());
+}
+
+#[test]
+fn test_6_tripwire_safety_brake_locks_previous_clean_snapshot() {
+    let source_temp = tempdir().expect("source tempdir");
+    let dest_temp = tempdir().expect("dest tempdir");
+    let db_temp = tempdir().expect("db tempdir");
+
+    let db_path = db_temp.path().join("test.db");
+    let db = DatabaseManager::new(&db_path).expect("db init");
+
+    let source_dir = source_temp.path();
+    let dest_dir = dest_temp.path();
+
+    let (_dest_id, job_id) = setup_test_job(
+        &db,
+        &source_dir.to_string_lossy(),
+        &dest_dir.to_string_lossy(),
+    );
+
+    // Write 30 initial files
+    for i in 0..30 {
+        fs::write(
+            source_dir.join(format!("doc_{:02}.txt", i)),
+            format!("Initial stable document content number {}", i).as_bytes(),
+        ).unwrap();
+    }
+
+    // Execute Snapshot 1 (clean)
+    let snap1 = execute_snapshot(&db, job_id, |_| {}).expect("snap 1");
+
+    let snap1_locked: bool = db.with_conn(|conn| {
+        let is_locked: i64 = conn.query_row(
+            "SELECT is_locked_readonly FROM snapshots WHERE id = ?1;",
+            params![snap1.snapshot_id],
+            |r| r.get(0),
+        )?;
+        Ok(is_locked == 1)
+    }).unwrap();
+    assert!(!snap1_locked, "Snap 1 initially should not be locked");
+
+    // Mass delete 26 files (>20% of 30, and >= 25 files)
+    for i in 0..26 {
+        let _ = fs::remove_file(source_dir.join(format!("doc_{:02}.txt", i)));
+    }
+
+    // Execute Snapshot 2
+    let snap2 = execute_snapshot(&db, job_id, |_| {}).expect("snap 2");
+
+    // Verify tripwire triggered
+    let (snap1_is_now_locked, snap2_tripwire_flag, snap2_files_deleted): (bool, bool, i64) = db.with_conn(|conn| {
+        let locked: i64 = conn.query_row(
+            "SELECT is_locked_readonly FROM snapshots WHERE id = ?1;",
+            params![snap1.snapshot_id],
+            |r| r.get(0),
+        )?;
+        let (flag, deleted): (i64, i64) = conn.query_row(
+            "SELECT tripwire_triggered, files_deleted FROM snapshots WHERE id = ?1;",
+            params![snap2.snapshot_id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )?;
+        Ok((locked == 1, flag == 1, deleted))
+    }).unwrap();
+
+    assert!(snap1_is_now_locked, "Tripwire must lock previous clean snapshot #1");
+    assert!(snap2_tripwire_flag, "Snapshot #2 must have tripwire_triggered = 1");
+    assert_eq!(snap2_files_deleted, 26, "Snapshot #2 files_deleted must be 26");
+}
+
+#[test]
+fn test_7_plain_file_emergency_mirror_sync_and_clean_deletions() {
+    let source_temp = tempdir().expect("source tempdir");
+    let dest_temp = tempdir().expect("dest tempdir");
+    let db_temp = tempdir().expect("db tempdir");
+
+    let db_path = db_temp.path().join("test.db");
+    let db = DatabaseManager::new(&db_path).expect("db init");
+
+    let source_dir = source_temp.path();
+    let dest_dir = dest_temp.path();
+
+    let (_dest_id, job_id) = setup_test_job(
+        &db,
+        &source_dir.to_string_lossy(),
+        &dest_dir.to_string_lossy(),
+    );
+
+    // Enable emergency plain mirror on job
+    db.with_conn_mut(|conn| {
+        conn.execute("UPDATE backup_jobs SET enable_emergency_mirror = 1 WHERE id = ?1;", params![job_id])?;
+        Ok(())
+    }).unwrap();
+
+    // Create files
+    fs::create_dir_all(source_dir.join("sub")).unwrap();
+    fs::write(source_dir.join("doc1.txt"), b"Document 1 text").unwrap();
+    fs::write(source_dir.join("sub").join("doc2.txt"), b"Subfolder Document 2 text").unwrap();
+    fs::write(source_dir.join("doc3.txt"), b"Document 3 will be deleted").unwrap();
+
+    let _snap1 = execute_snapshot(&db, job_id, |_| {}).expect("snap 1");
+
+    let mirror_dir = dest_dir.join("SnapVault_Latest_Readable");
+    assert!(mirror_dir.exists(), "Mirror directory must be created");
+    assert!(mirror_dir.join("doc1.txt").exists());
+    assert!(mirror_dir.join("sub").join("doc2.txt").exists());
+    assert!(mirror_dir.join("doc3.txt").exists());
+    assert_eq!(fs::read(mirror_dir.join("doc1.txt")).unwrap(), b"Document 1 text");
+
+    // Modify doc1.txt, delete doc3.txt, add doc4.txt
+    fs::write(source_dir.join("doc1.txt"), b"Document 1 MODIFIED text").unwrap();
+    fs::remove_file(source_dir.join("doc3.txt")).unwrap();
+    fs::write(source_dir.join("doc4.txt"), b"Brand new Document 4").unwrap();
+
+    let _snap2 = execute_snapshot(&db, job_id, |_| {}).expect("snap 2");
+
+    assert_eq!(fs::read(mirror_dir.join("doc1.txt")).unwrap(), b"Document 1 MODIFIED text");
+    assert!(!mirror_dir.join("doc3.txt").exists(), "Deleted file doc3.txt must be pruned from mirror");
+    assert!(mirror_dir.join("doc4.txt").exists(), "New file doc4.txt must be in mirror");
 }
