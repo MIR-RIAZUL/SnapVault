@@ -5,6 +5,7 @@ import { TimeMachine } from "@/pages/TimeMachine";
 import { Jobs } from "@/pages/Jobs";
 import { ActivityLog } from "@/pages/ActivityLog";
 import { Settings } from "@/pages/Settings";
+import { Guide } from "@/pages/Guide";
 import { pingDb, listBackupJobs, listDrives, getLicenseStatus } from "@/lib/ipc";
 import type { BackupJob, Drive, PingDbResponse, LicenseStatusDto } from "@/types/ipc";
 
@@ -80,6 +81,7 @@ export default function App() {
             onOpenTimeMachine={handleOpenTimeMachine}
             onRefreshDrives={refreshAppData}
             licenseStatus={licenseStatus}
+            onOpenGuide={() => setActiveTab("guide")}
           />
         )}
 
@@ -94,6 +96,10 @@ export default function App() {
         {activeTab === "jobs" && <Jobs onRefreshDrives={refreshAppData} />}
 
         {activeTab === "activity" && <ActivityLog />}
+
+        {activeTab === "guide" && (
+          <Guide onNavigateTab={setActiveTab} />
+        )}
 
         {activeTab === "settings" && (
           <Settings currentTheme={theme} onThemeChange={setTheme} />

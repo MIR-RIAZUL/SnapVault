@@ -10,10 +10,11 @@ import {
   Moon,
   Sparkles,
   Settings,
+  BookOpen,
 } from "lucide-react";
 import type { LicenseStatusDto } from "@/types/ipc";
 
-export type NavTab = "dashboard" | "timemachine" | "jobs" | "activity" | "settings";
+export type NavTab = "dashboard" | "timemachine" | "jobs" | "activity" | "guide" | "settings";
 
 interface SidebarProps {
   activeTab: NavTab;
@@ -57,6 +58,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: "activity",
       label: "Activity Log",
       icon: Activity,
+    },
+    {
+      id: "guide",
+      label: "How to Use Me Properly",
+      icon: BookOpen,
+      badge: "Guide",
     },
     {
       id: "settings",

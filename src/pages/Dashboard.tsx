@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   FolderOpen,
   Zap,
+  BookOpen,
 } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
@@ -31,12 +32,14 @@ interface DashboardProps {
   onOpenTimeMachine: (jobId: number) => void;
   onRefreshDrives?: () => void;
   licenseStatus?: LicenseStatusDto | null;
+  onOpenGuide?: () => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
   onOpenTimeMachine,
   onRefreshDrives,
   licenseStatus,
+  onOpenGuide,
 }) => {
   const [jobs, setJobs] = useState<BackupJob[]>([]);
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
@@ -324,9 +327,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
       {jobs.length === 0 && !loading && (
         <div className="p-8 rounded-2xl bg-slate-900/80 border border-slate-800/80 shadow-2xl space-y-6">
           <div className="max-w-xl">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-sky-500/10 text-sky-400 border border-sky-500/20 mb-3">
-              <Zap className="w-3.5 h-3.5" />
-              Quick Setup Wizard
+            <div className="flex items-center gap-3 mb-3">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                <Zap className="w-3.5 h-3.5" />
+                Quick Setup Wizard
+              </div>
+              {onOpenGuide && (
+                <button
+                  onClick={onOpenGuide}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-slate-400 hover:text-sky-300 bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 transition-colors"
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Need help? Open Guide</span>
+                </button>
+              )}
             </div>
             <h2 className="text-xl font-bold text-white tracking-tight">
               Protect your files in 3 easy steps
