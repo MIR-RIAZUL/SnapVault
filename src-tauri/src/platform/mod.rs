@@ -60,3 +60,35 @@ pub fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 pub fn dispatch_toast(app: &AppHandle, title: &str, body: &str) {
     let _ = app.notification().builder().title(title).body(body).show();
 }
+
+/// Configures background worker thread priority for Quiet Mode.
+/// Lowering thread priority to THREAD_PRIORITY_BELOW_NORMAL ensures
+/// background FastCDC chunking and BLAKE3 hashing never interfere with
+/// foreground gaming, video calls, or heavy interactive workflows.
+pub fn apply_quiet_mode_priority(enabled: bool) {
+    #[cfg(windows)]
+    {
+        extern "system" {
+            fn GetCurrentThread() -> *mut std::ffi::c_void;
+            fn SetThreadPriority(h_thread: *mut std::ffi::c_void, n_priority: i32) -> i32;
+        }
+        const THREAD_PRIORITY_NORMAL: i32 = 0;
+        const THREAD_PRIORITY_BELOW_NORMAL: i32 = -1;
+
+        let priority = if enabled {
+            THREAD_PRIORITY_BELOW_NORMAL
+        } else {
+            THREAD_PRIORITY_NORMAL
+        };
+
+        // SAFETY: Calling GetCurrentThread and SetThreadPriority with valid Win32 constants
+        unsafe {
+            let handle = GetCurrentThread();
+            SetThreadPriority(handle, priority);
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = enabled;
+    }
+}

@@ -4,6 +4,7 @@ import { Dashboard } from "@/pages/Dashboard";
 import { TimeMachine } from "@/pages/TimeMachine";
 import { Jobs } from "@/pages/Jobs";
 import { ActivityLog } from "@/pages/ActivityLog";
+import { Settings } from "@/pages/Settings";
 import { pingDb, listBackupJobs, listDrives } from "@/lib/ipc";
 import type { BackupJob, Drive, PingDbResponse } from "@/types/ipc";
 
@@ -88,6 +89,10 @@ export default function App() {
         {activeTab === "jobs" && <Jobs onRefreshDrives={refreshAppData} />}
 
         {activeTab === "activity" && <ActivityLog />}
+
+        {activeTab === "settings" && (
+          <Settings currentTheme={theme} onThemeChange={setTheme} />
+        )}
       </main>
     </div>
   );

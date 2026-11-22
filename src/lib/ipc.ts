@@ -15,6 +15,7 @@ import type {
   FilePreviewResponse,
   HealthCheckResult,
   HealthStatusSummary,
+  AppSettingsDto,
 } from "@/types/ipc";
 
 export async function pingDb(): Promise<PingDbResponse> {
@@ -107,4 +108,12 @@ export async function pauseBackups(): Promise<void> {
 
 export async function resumeBackups(): Promise<void> {
   return await invoke<void>("resume_backups");
+}
+
+export async function getAppSettings(): Promise<AppSettingsDto> {
+  return await invoke<AppSettingsDto>("get_app_settings");
+}
+
+export async function saveAppSettings(settings: AppSettingsDto): Promise<void> {
+  return await invoke<void>("save_app_settings", { settings });
 }

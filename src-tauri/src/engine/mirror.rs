@@ -4,6 +4,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::engine::path_helper::to_extended_length_path;
 use crate::error::{Result, SnapVaultError};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -22,7 +23,7 @@ pub fn sync_plain_file_mirror(
     source_root: &Path,
     file_rel_paths: &[String],
 ) -> Result<MirrorSyncResult> {
-    let mirror_dir = dest_drive_root.join("SnapVault_Latest_Readable");
+    let mirror_dir = to_extended_length_path(&dest_drive_root.join("SnapVault_Latest_Readable"));
     fs::create_dir_all(&mirror_dir).map_err(SnapVaultError::Io)?;
 
     let mut active_mirror_files = HashSet::new();
@@ -31,8 +32,8 @@ pub fn sync_plain_file_mirror(
 
     for rel in file_rel_paths {
         let normalized = rel.replace('/', "\\");
-        let src_file = source_root.join(&normalized);
-        let dst_file = mirror_dir.join(&normalized);
+        let src_file = to_extended_length_path(&source_root.join(&normalized));
+        let dst_file = to_extended_length_path(&mirror_dir.join(&normalized));
 
         active_mirror_files.insert(dst_file.clone());
 

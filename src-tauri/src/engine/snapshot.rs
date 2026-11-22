@@ -9,7 +9,11 @@ use walkdir::WalkDir;
 
 use crate::db::DatabaseManager;
 use crate::engine::chunker::{chunk_and_store_file, FileChunkingResult};
+use crate::engine::cleanup::cleanup_orphan_tmp_files;
+use crate::engine::exclusions::{get_default_exclusions, is_path_excluded};
+use crate::engine::path_helper::{is_symlink_or_junction, to_extended_length_path};
 use crate::error::{Result, SnapVaultError};
+use crate::platform::apply_quiet_mode_priority;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SnapshotProgress {
@@ -95,6 +99,25 @@ where
         )));
     }
 
+    // Clean up any leftover orphan .tmp files from previous interrupted runs or crashes
+    let _ = cleanup_orphan_tmp_files(&dest_root);
+
+    // Apply quiet mode priority to background backup thread
+    apply_quiet_mode_priority(true);
+
+    // Load active exclusion patterns
+    let exclusions: Vec<String> = db.with_conn(|conn| {
+        let stmt = conn.prepare("SELECT value FROM app_settings WHERE key = 'exclusion_patterns';");
+        if let Ok(mut s) = stmt {
+            if let Ok(val) = s.query_row([], |r| r.get::<_, String>(0)) {
+                if let Ok(list) = serde_json::from_str::<Vec<String>>(&val) {
+                    return Ok(list);
+                }
+            }
+        }
+        Ok(get_default_exclusions())
+    }).unwrap_or_else(|_| get_default_exclusions());
+
     // 2. Insert PENDING snapshot in database
     let started_at = Utc::now().to_rfc3339();
     let snapshot_id: i64 = db.with_conn_mut(|conn| {
@@ -127,18 +150,31 @@ where
                 }
             };
 
+            let full_file_path = entry.path();
+
+            // Skip NTFS symlinks, directory junctions, and reparse points
+            if is_symlink_or_junction(full_file_path) {
+                println!("Skipping symlink / junction / reparse point: {}", full_file_path.display());
+                continue;
+            }
+
             // Only process regular files
             if !entry.file_type().is_file() {
                 continue;
             }
 
-            let full_file_path = entry.path();
             let relative_path = match full_file_path.strip_prefix(&source_path) {
                 Ok(p) => p.to_string_lossy().replace('\\', "/"),
                 Err(_) => full_file_path.file_name().unwrap_or_default().to_string_lossy().to_string(),
             };
 
-            let metadata = match fs::metadata(full_file_path) {
+            // Evaluate exclusion presets
+            if is_path_excluded(&relative_path, &exclusions) {
+                continue;
+            }
+
+            let extended_path = to_extended_length_path(full_file_path);
+            let metadata = match fs::metadata(&extended_path) {
                 Ok(m) => m,
                 Err(err) => {
                     eprintln!("Warning: could not read metadata for {}: {}", full_file_path.display(), err);
@@ -246,11 +282,11 @@ where
         files: manifest_entries,
     };
 
-    let manifests_dir = dest_root.join(".snapvault").join("manifests");
+    let manifests_dir = to_extended_length_path(&dest_root.join(".snapvault").join("manifests"));
     fs::create_dir_all(&manifests_dir)?;
 
-    let target_manifest_path = manifests_dir.join(format!("{}.json", snapshot_id));
-    let temp_manifest_path = manifests_dir.join(format!("{}.json.tmp.{}", snapshot_id, Uuid::new_v4()));
+    let target_manifest_path = to_extended_length_path(&manifests_dir.join(format!("{}.json", snapshot_id)));
+    let temp_manifest_path = to_extended_length_path(&manifests_dir.join(format!("{}.json.tmp.{}", snapshot_id, Uuid::new_v4())));
 
     let manifest_bytes = serde_json::to_vec_pretty(&manifest)
         .map_err(SnapVaultError::Serialization)?;

@@ -1,6 +1,9 @@
 pub mod chunker;
+pub mod cleanup;
+pub mod exclusions;
 pub mod health;
 pub mod mirror;
+pub mod path_helper;
 pub mod prune;
 pub mod restore;
 pub mod snapshot;

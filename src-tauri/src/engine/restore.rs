@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 use crate::db::DatabaseManager;
 use crate::engine::chunker::get_chunk_absolute_path;
+use crate::engine::path_helper::to_extended_length_path;
 use crate::error::{Result, SnapVaultError};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -17,6 +18,8 @@ pub struct RestoreResult {
     pub files_restored: u64,
     pub bytes_restored: u64,
     pub restored_paths: Vec<String>,
+    #[serde(default)]
+    pub failed_files: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -137,11 +140,14 @@ pub fn restore_from_snapshot(
         ));
     }
 
-    fs::create_dir_all(target_restore_dir)?;
+    let extended_restore_dir = to_extended_length_path(target_restore_dir);
+    fs::create_dir_all(&extended_restore_dir)?;
 
     let mut files_restored = 0u64;
     let mut bytes_restored = 0u64;
     let mut restored_paths = Vec::new();
+    let mut failed_files = Vec::new();
+    let file_entries_count = file_entries.len();
 
     for (rel_path, _file_size, expected_hash, chunk_hashes_json) in file_entries {
         let chunk_hashes: Vec<String> = serde_json::from_str(&chunk_hashes_json)
@@ -154,24 +160,26 @@ pub fn restore_from_snapshot(
             file_destination = get_conflict_safe_path(&file_destination);
         }
 
-        if let Some(parent) = file_destination.parent() {
+        let extended_dst = to_extended_length_path(&file_destination);
+
+        if let Some(parent) = extended_dst.parent() {
             fs::create_dir_all(parent)?;
         }
 
         let temp_reconstruct_path = file_destination.with_extension(format!("tmp.{}", Uuid::new_v4()));
+        let extended_temp = to_extended_length_path(&temp_reconstruct_path);
 
-        {
+        let reconstruct_res: Result<()> = (|| {
             let mut out_file = OpenOptions::new()
                 .write(true)
                 .create_new(true)
-                .open(&temp_reconstruct_path)?;
+                .open(&extended_temp)?;
 
             let mut hasher = blake3::Hasher::new();
 
             for chunk_hash in &chunk_hashes {
-                let chunk_file_path = get_chunk_absolute_path(&dest_store_root, chunk_hash);
+                let chunk_file_path = to_extended_length_path(&get_chunk_absolute_path(&dest_store_root, chunk_hash));
                 if !chunk_file_path.exists() {
-                    let _ = fs::remove_file(&temp_reconstruct_path);
                     return Err(SnapVaultError::General(format!(
                         "Missing chunk {} on storage media during restore",
                         chunk_hash
@@ -190,21 +198,32 @@ pub fn restore_from_snapshot(
 
             let computed_hash = hasher.finalize().to_hex().to_string();
             if computed_hash != expected_hash {
-                let _ = fs::remove_file(&temp_reconstruct_path);
                 return Err(SnapVaultError::General(format!(
                     "Integrity verification failed for {}: expected {}, computed {}",
                     rel_path, expected_hash, computed_hash
                 )));
             }
+
+            Ok(())
+        })();
+
+        if let Err(err) = reconstruct_res {
+            let _ = fs::remove_file(&extended_temp);
+            eprintln!("Warning: file restore failed for {}: {}", rel_path, err);
+            failed_files.push(format!("{}: {}", rel_path, err));
+            if target_rel_path.is_some() && file_entries_count == 1 {
+                return Err(err);
+            }
+            continue;
         }
 
         // Atomic rename of reconstructed file
-        if file_destination.exists() && overwrite {
-            let _ = fs::remove_file(&file_destination);
+        if extended_dst.exists() && overwrite {
+            let _ = fs::remove_file(&extended_dst);
         }
-        fs::rename(&temp_reconstruct_path, &file_destination)?;
+        fs::rename(&extended_temp, &extended_dst)?;
 
-        let restored_bytes = fs::metadata(&file_destination).map(|m| m.len()).unwrap_or(0);
+        let restored_bytes = fs::metadata(&extended_dst).map(|m| m.len()).unwrap_or(0);
         files_restored += 1;
         bytes_restored += restored_bytes;
         restored_paths.push(file_destination.to_string_lossy().to_string());
@@ -214,6 +233,7 @@ pub fn restore_from_snapshot(
         files_restored,
         bytes_restored,
         restored_paths,
+        failed_files,
     })
 }
 

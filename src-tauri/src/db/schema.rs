@@ -102,6 +102,12 @@ CREATE TABLE IF NOT EXISTS health_checks (
 );
 
 CREATE INDEX IF NOT EXISTS idx_health_checks_ran ON health_checks(job_id, ran_at DESC);
+
+-- Table: app_settings (key-value configuration store)
+CREATE TABLE IF NOT EXISTS app_settings (
+    key                 TEXT PRIMARY KEY,
+    value               TEXT NOT NULL
+);
 "#;
 
 pub fn initialize_pragmas(conn: &Connection) -> Result<()> {
@@ -137,6 +143,29 @@ pub fn run_migrations(conn: &mut Connection) -> Result<u32> {
             [],
         )?;
         tx.commit()?;
+    }
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS app_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );",
+        [],
+    )?;
+
+    let defaults = [
+        ("quiet_mode", "true"),
+        ("exclusion_patterns", r#"["node_modules", ".git/objects", "*.tmp", "~$*", "Thumbs.db", "$RECYCLE.BIN", "System Volume Information"]"#),
+        ("tripwire_pct", "20"),
+        ("tripwire_min_files", "25"),
+        ("notifications_enabled", "true"),
+        ("theme", "dark"),
+    ];
+    for (k, v) in defaults {
+        conn.execute(
+            "INSERT OR IGNORE INTO app_settings (key, value) VALUES (?1, ?2);",
+            [k, v],
+        )?;
     }
 
     Ok(CURRENT_SCHEMA_VERSION)

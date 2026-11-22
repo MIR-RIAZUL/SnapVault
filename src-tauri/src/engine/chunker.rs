@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use fastcdc::FastCDC;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use crate::engine::path_helper::to_extended_length_path;
 use crate::error::{Result, SnapVaultError};
 
 pub const MIN_CHUNK_SIZE: usize = 4096;      // 4 KB
@@ -46,16 +47,18 @@ pub fn get_chunk_absolute_path(store_root: &Path, hash: &str) -> PathBuf {
 
 /// Writes chunk data atomically using .tmp -> sync_all -> rename pattern
 pub fn write_chunk_atomically(target_path: &Path, data: &[u8]) -> Result<bool> {
+    let extended_target = to_extended_length_path(target_path);
+
     // If chunk already exists with identical size, it is deduplicated
-    if target_path.exists() {
-        if let Ok(meta) = fs::metadata(target_path) {
+    if extended_target.exists() {
+        if let Ok(meta) = fs::metadata(&extended_target) {
             if meta.len() as usize == data.len() {
                 return Ok(false); // Not new, deduplicated
             }
         }
     }
 
-    let parent = target_path.parent().ok_or_else(|| {
+    let parent = extended_target.parent().ok_or_else(|| {
         SnapVaultError::General("Chunk target path missing parent directory".to_string())
     })?;
     fs::create_dir_all(parent)?;
@@ -73,7 +76,7 @@ pub fn write_chunk_atomically(target_path: &Path, data: &[u8]) -> Result<bool> {
         file.sync_all()?;
     }
 
-    fs::rename(&temp_path, target_path)?;
+    fs::rename(&temp_path, &extended_target)?;
     Ok(true) // Newly written
 }
 
@@ -139,12 +142,31 @@ pub fn chunk_and_store_bytes(
     })
 }
 
-/// Streams a file from disk, chunks it with FastCDC, and writes new chunks to destination
+/// Streams a file from disk, chunks it with FastCDC, and writes new chunks to destination.
+/// If opening the file fails due to Windows sharing violation / file-lock, retries once after 500ms.
 pub fn chunk_and_store_file(
     source_file_path: &Path,
     dest_store_root: &Path,
 ) -> Result<FileChunkingResult> {
-    let mut file = File::open(source_file_path)?;
+    let extended_source = to_extended_length_path(source_file_path);
+
+    let mut file = match File::open(&extended_source) {
+        Ok(f) => f,
+        Err(err) => {
+            let is_locked = err.kind() == std::io::ErrorKind::PermissionDenied
+                || err.raw_os_error() == Some(32)  // ERROR_SHARING_VIOLATION
+                || err.raw_os_error() == Some(33); // ERROR_LOCK_VIOLATION
+
+            if is_locked {
+                // Retry once after 500ms
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                File::open(&extended_source)?
+            } else {
+                return Err(SnapVaultError::Io(err));
+            }
+        }
+    };
+
     let mut buffer = Vec::new();
     file.read_to_end(&mut buffer)?;
 

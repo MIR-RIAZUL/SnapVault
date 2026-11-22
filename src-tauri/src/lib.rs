@@ -6,14 +6,15 @@ pub mod licensing;
 pub mod platform;
 pub mod watcher;
 
+use tauri::Manager;
 use db::{default_db_path, DatabaseManager};
 use platform::setup_tray;
 use watcher::{start_drive_watcher, WatcherState};
 use commands::{
-    browse_snapshot_dir_command, create_backup_job, diff_snapshot_files, get_latest_health_status,
-    list_backup_jobs, list_drives, list_snapshots, pause_backups, ping_db, preview_snapshot_file,
-    prune_snapshots, register_drive, restore_entry, resume_backups, run_health_check, run_snapshot,
-    toggle_plain_mirror, unlock_tripwire_snapshot,
+    browse_snapshot_dir_command, create_backup_job, diff_snapshot_files, get_app_settings,
+    get_latest_health_status, list_backup_jobs, list_drives, list_snapshots, pause_backups, ping_db,
+    preview_snapshot_file, prune_snapshots, register_drive, restore_entry, resume_backups,
+    run_health_check, run_snapshot, save_app_settings, toggle_plain_mirror, unlock_tripwire_snapshot,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -30,6 +31,18 @@ pub fn run() {
         .setup(|app| {
             let _ = setup_tray(app);
             start_drive_watcher(app.handle().clone());
+
+            // Startup sweep: clean orphan .tmp files across active destination drives
+            let db = app.state::<DatabaseManager>();
+            let _ = db.with_conn(|conn| {
+                let mut stmt = conn.prepare("SELECT mount_path FROM drives WHERE role = 'destination';")?;
+                let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
+                for p in rows.flatten() {
+                    let _ = crate::engine::cleanup::cleanup_orphan_tmp_files(std::path::Path::new(&p));
+                }
+                Ok(())
+            });
+
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -56,7 +69,9 @@ pub fn run() {
             unlock_tripwire_snapshot,
             toggle_plain_mirror,
             pause_backups,
-            resume_backups
+            resume_backups,
+            get_app_settings,
+            save_app_settings
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

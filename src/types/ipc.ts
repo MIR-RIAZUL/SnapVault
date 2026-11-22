@@ -105,6 +105,7 @@ export interface RestoreResult {
   files_restored: number;
   bytes_restored: number;
   restored_paths: string[];
+  failed_files?: string[];
 }
 
 export interface PruneResult {
@@ -186,4 +187,13 @@ export interface TripwireAlertPayload {
   volatility_percentage: number;
   previous_snapshot_id?: number | null;
   message: string;
+}
+
+export interface AppSettingsDto {
+  quiet_mode: boolean;
+  exclusion_patterns: string[];
+  tripwire_pct: number;
+  tripwire_min_files: number;
+  notifications_enabled: boolean;
+  theme: string;
 }

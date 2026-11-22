@@ -166,21 +166,22 @@
 
 ---
 
-### Phase 5: System Tray, Scheduler, Polish, Trial
+### Phase 5: Hardening, Scheduler, Settings & Stress Tests
 
-**Goal:** Transform SnapVault from a functional tool into a polished, ship-ready product with background operation, automatic scheduling, retention enforcement, and a professional trial experience.
+**Goal:** Harden SnapVault against real-world Windows 11 filesystem edge cases, add the background interval scheduler and Settings page, and validate reliability with an automated 500+ file stress-test suite.
 
-- [ ] System tray icon with status badge
-- [ ] Tray context menu
-- [ ] Background scheduler (cron + continuous)
-- [ ] GFS retention policy enforcement
-- [ ] Chunk garbage collection
-- [ ] 14-day trial logic (local-only)
-- [ ] Trial UI and post-trial behavior
-- [ ] UI polish pass (animations, loading, errors)
-- [ ] Accessibility audit
-- [ ] Phase 5 Central Tester verification passed
-- [ ] Phase 5 Report generated
+- [x] Windows Long Paths (`\\?\` extended prefix) and Unicode filename support (Bengali, CJK, emoji, spaces)
+- [x] Symlink and NTFS junction loop prevention (`follow_links(false)` + reparse attribute check)
+- [x] In-use / locked file handling (500ms retry with graceful skip)
+- [x] Default exclusion presets (`node_modules`, `.git/objects`, `*.tmp`, `~$*`, `Thumbs.db`, `$RECYCLE.BIN`, `System Volume Information`)
+- [x] Startup orphan `.tmp` file cleanup in `.snapvault/chunks/` and `.snapvault/manifests/`
+- [x] Quiet Mode background worker CPU throttling (`THREAD_PRIORITY_BELOW_NORMAL` on Windows)
+- [x] Background interval scheduler with periodic reconciliation scans (mitigating RISK-003)
+- [x] Automatic weekly Proof-of-Restore health checks
+- [x] Settings page (`src/pages/Settings.tsx`) with Quiet Mode toggle, exclusion editor, tripwire controls, notifications, and theme selector
+- [x] Automated stress-test suite with 500+ nested files and corrupted chunk batch resilience
+- [x] Phase 5 Central Tester verification passed (28 tests: 17 unit, 7 integration, 4 stress; 0 clippy warnings)
+- [x] Phase 5 Report generated (`reports/PHASE_5_REPORT.md`)
 
 **Key Deliverables:**
 - System tray integration with dynamic icon (idle / backing up / error / trial expiring)

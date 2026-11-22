@@ -9,9 +9,10 @@ import {
   Sun,
   Moon,
   Sparkles,
+  Settings,
 } from "lucide-react";
 
-export type NavTab = "dashboard" | "timemachine" | "jobs" | "activity";
+export type NavTab = "dashboard" | "timemachine" | "jobs" | "activity" | "settings";
 
 interface SidebarProps {
   activeTab: NavTab;
@@ -53,6 +54,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: "activity",
       label: "Activity Log",
       icon: Activity,
+    },
+    {
+      id: "settings",
+      label: "Settings",
+      icon: Settings,
     },
   ];
 

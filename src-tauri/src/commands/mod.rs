@@ -387,3 +387,80 @@ pub fn resume_backups(
     state.set_paused(false);
     Ok(())
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppSettingsDto {
+    pub quiet_mode: bool,
+    pub exclusion_patterns: Vec<String>,
+    pub tripwire_pct: u32,
+    pub tripwire_min_files: u32,
+    pub notifications_enabled: bool,
+    pub theme: String,
+}
+
+#[tauri::command]
+pub fn get_app_settings(
+    db: State<'_, DatabaseManager>,
+) -> Result<AppSettingsDto, String> {
+    db.with_conn(|conn| {
+        let get_val = |k: &str, def: &str| -> String {
+            conn.query_row(
+                "SELECT value FROM app_settings WHERE key = ?1;",
+                [k],
+                |r| r.get(0),
+            ).unwrap_or_else(|_| def.to_string())
+        };
+
+        let quiet_mode = get_val("quiet_mode", "true") == "true";
+        let exclusions_raw = get_val("exclusion_patterns", "[]");
+        let exclusion_patterns = serde_json::from_str::<Vec<String>>(&exclusions_raw)
+            .unwrap_or_else(|_| crate::engine::exclusions::get_default_exclusions());
+        let tripwire_pct: u32 = get_val("tripwire_pct", "20").parse().unwrap_or(20);
+        let tripwire_min_files: u32 = get_val("tripwire_min_files", "25").parse().unwrap_or(25);
+        let notifications_enabled = get_val("notifications_enabled", "true") == "true";
+        let theme = get_val("theme", "dark");
+
+        Ok(AppSettingsDto {
+            quiet_mode,
+            exclusion_patterns,
+            tripwire_pct,
+            tripwire_min_files,
+            notifications_enabled,
+            theme,
+        })
+    }).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn save_app_settings(
+    db: State<'_, DatabaseManager>,
+    settings: AppSettingsDto,
+) -> Result<(), String> {
+    crate::platform::apply_quiet_mode_priority(settings.quiet_mode);
+
+    let exclusions_json = serde_json::to_string(&settings.exclusion_patterns)
+        .unwrap_or_else(|_| "[]".to_string());
+
+    db.with_conn_mut(|conn| {
+        let tx = conn.transaction()?;
+        let pairs = [
+            ("quiet_mode", if settings.quiet_mode { "true" } else { "false" }),
+            ("exclusion_patterns", &exclusions_json),
+            ("tripwire_pct", &settings.tripwire_pct.to_string()),
+            ("tripwire_min_files", &settings.tripwire_min_files.to_string()),
+            ("notifications_enabled", if settings.notifications_enabled { "true" } else { "false" }),
+            ("theme", &settings.theme),
+        ];
+
+        for (k, v) in pairs {
+            tx.execute(
+                "INSERT INTO app_settings (key, value) VALUES (?1, ?2) 
+                 ON CONFLICT(key) DO UPDATE SET value = ?2;",
+                [k, v],
+            )?;
+        }
+
+        tx.commit()?;
+        Ok(())
+    }).map_err(|e| e.to_string())
+}
