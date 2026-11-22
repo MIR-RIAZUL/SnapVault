@@ -15,8 +15,8 @@ This document tracks all known issues, blockers, and architectural risks discove
 | ISS-001 | 0 | 🟢 RESOLVED | Environment | MSVC Build Tools installed — `link.exe` operational | RESOLVED |
 | ISS-002 | 0 | 🟢 RESOLVED | Environment | Default Rust toolchain switched to `x86_64-pc-windows-msvc` | RESOLVED |
 | ISS-003 | 0 | 🟢 LOW | Environment | `winapp` CLI not available for MSIX packaging | OPEN (Deferred to Phase 6) |
-| RISK-001 | 2 | 🟡 MEDIUM | Architecture | SQLite concurrent write performance under heavy backup load | MONITORING |
-| RISK-002 | 2 | 🟢 LOW | Architecture | FastCDC chunk size vs dedup ratio tradeoff needs tuning | MONITORING |
+| RISK-001 | 2 | 🟢 MITIGATED | Architecture | SQLite concurrent write performance under heavy backup load | MITIGATED (Batched 1,000 rows) |
+| RISK-002 | 2 | 🟢 VALIDATED | Architecture | FastCDC chunk size vs dedup ratio tradeoff (4KB/16KB/64KB) | VALIDATED |
 | RISK-003 | 5 | 🟡 MEDIUM | Platform | Windows file system watcher reliability under heavy I/O | MONITORING |
 
 ---
@@ -262,6 +262,8 @@ Test 3: Monitor a network drive — verify polling fallback activates automatica
 
 | Date | ID | Change |
 |---|---|---|
+| 2026-11-23 | RISK-001 | MITIGATED in Phase 2 via 1,000-row batching within transactions |
+| 2026-11-23 | RISK-002 | VALIDATED in Phase 2 via automated FastCDC chunking and dedup test suites |
 | 2026-11-23 | ISS-001 | RESOLVED — Visual Studio C++ Build Tools installed, link.exe operational |
 | 2026-11-23 | ISS-002 | RESOLVED — Default Rust toolchain switched to x86_64-pc-windows-msvc |
 | 2025-07-14 | ISS-001 | Logged during Phase 0 environment check. MSVC Build Tools missing. |

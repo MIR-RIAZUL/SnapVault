@@ -86,18 +86,18 @@
 
 **Goal:** Implement the complete backup pipeline — from scanning the source directory to producing a deduplicated, content-addressed snapshot on the destination drive. This is the heart of SnapVault.
 
-- [ ] FastCDC chunking engine
-- [ ] BLAKE3 hashing integration
-- [ ] Content-addressed chunk store (2-level fan-out)
-- [ ] Atomic write engine (.tmp → sync → rename)
-- [ ] Snapshot lifecycle state machine
-- [ ] File system scanner (long-path + Unicode safe)
-- [ ] Deduplication logic
-- [ ] Drive pairing CRUD
-- [ ] Backup job execution pipeline
-- [ ] File entry recording
-- [ ] Phase 2 Central Tester verification passed
-- [ ] Phase 2 Report generated
+- [x] FastCDC chunking engine (min 4KB, avg 16KB, max 64KB)
+- [x] BLAKE3 hashing integration
+- [x] Content-addressed chunk store (2-level fan-out `chunks/xx/yy/[hash].chunk`)
+- [x] Atomic write engine (.tmp -> sync_all -> rename)
+- [x] Snapshot lifecycle state machine (PENDING -> COMMITTED / INTERRUPTED)
+- [x] File system scanner (walkdir with non-panicking error handling)
+- [x] Deduplication logic (skip existing chunks, tally dedup_saved_bytes)
+- [x] Drive pairing CRUD (register_drive, list_drives, create_backup_job, list_backup_jobs)
+- [x] Backup job execution pipeline (unplug-safe snapshot execution)
+- [x] File entry recording (batched transactions of 1,000 rows mitigating RISK-001)
+- [x] Phase 2 Central Tester verification passed (11 unit/integration tests, 0 clippy warnings)
+- [x] Phase 2 Report generated (`reports/PHASE_2_REPORT.md`)
 
 **Key Deliverables:**
 - `src-tauri/src/backup/` module with chunker, hasher, writer, scanner
@@ -290,12 +290,12 @@
 |-------|------:|:--------:|:-----------:|:-----------:|--------|
 | Phase 0 — Initialization | 18 | 18 | 0 | 0 | ✅ Complete |
 | Phase 1 — Scaffold | 9 | 9 | 0 | 0 | ✅ Complete |
-| Phase 2 — Backup Engine | 12 | 0 | 0 | 12 | ⬜ Not Started |
+| Phase 2 — Backup Engine | 12 | 12 | 0 | 0 | ✅ Complete |
 | Phase 3 — Restore + UI | 10 | 0 | 0 | 10 | ⬜ Not Started |
 | Phase 4 — Killer Features | 10 | 0 | 0 | 10 | ⬜ Not Started |
 | Phase 5 — Polish + Trial | 11 | 0 | 0 | 11 | ⬜ Not Started |
 | Phase 6 — Store Launch | 11 | 0 | 0 | 11 | ⬜ Not Started |
-| **v1.0 Total** | **81** | **27** | **0** | **54** | **33% Complete** |
+| **v1.0 Total** | **81** | **39** | **0** | **42** | **48% Complete** |
 
 | Backlog | Tasks | Status |
 |---------|------:|--------|

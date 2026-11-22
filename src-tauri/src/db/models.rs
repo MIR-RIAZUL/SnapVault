@@ -44,6 +44,7 @@ pub struct Snapshot {
     pub files_modified: i64,
     pub files_deleted: i64,
     pub tripwire_triggered: bool,
+    pub is_locked_readonly: bool,
     pub error_message: Option<String>,
 }
 

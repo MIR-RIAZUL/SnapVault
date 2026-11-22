@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS snapshots (
     files_modified      INTEGER NOT NULL DEFAULT 0,
     files_deleted       INTEGER NOT NULL DEFAULT 0,
     tripwire_triggered  INTEGER NOT NULL DEFAULT 0 CHECK(tripwire_triggered IN (0, 1)),
+    is_locked_readonly  INTEGER NOT NULL DEFAULT 0 CHECK(is_locked_readonly IN (0, 1)),
     error_message       TEXT
 );
 
