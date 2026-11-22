@@ -450,26 +450,16 @@ Examples:
 ### 4.2 Commit Message Format
 
 ```
-Format: [Phase <N>] <Component>: <description>
-
-Components:
-  core       — Chunking engine, hashing, snapshot logic
-  db         — SQLite schema, migrations, queries
-  fs         — Filesystem traversal, file I/O, Windows API
-  ui         — React components, pages, layouts
-  ipc        — Tauri command handlers, IPC types
-  config     — App configuration, settings
-  trial      — Trial/licensing logic
-  build      — Build scripts, CI/CD, packaging
-  docs       — Documentation updates
-  test       — Test-only changes
+Format: Simple text only (e.g. "add this", "update database schema", "scaffold UI")
+Rule: NO "feat", "fix", or prefix labels will be used. Purely simple descriptive text.
 
 Examples:
-  [Phase 2] core: implement BLAKE3 chunk hashing with streaming API
-  [Phase 3] ui: add snapshot timeline carousel with keyboard navigation
-  [Phase 4] db: add migration for file_versions search index
-  [Phase 1] build: configure Tauri for Windows 11 target
-  [Hotfix] fs: handle NTFS reparse points in directory walker
+  add this
+  update database schema and models
+  scaffold tauri backend and react frontend
+  implement fastcdc chunking engine
+  add timeline scrubber component
+  clean up clippy warnings
 ```
 
 ### 4.3 Branch Rules
