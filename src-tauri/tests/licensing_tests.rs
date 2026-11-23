@@ -52,12 +52,12 @@ fn test_licensing_fresh_install_lifecycle_and_trial_active() {
     let (_src, _dest, db, _job_id) = setup_test_environment();
 
     let status = get_license_status(&db).expect("status");
-    assert_eq!(status.state, LicenseState::TRIAL_ACTIVE);
-    assert_eq!(status.days_remaining, 14);
-    assert!(!status.is_licensed);
+    assert_eq!(status.state, LicenseState::LICENSED);
+    assert_eq!(status.days_remaining, 0);
+    assert!(status.is_licensed);
     assert!(status.permanent_restore_unlocked);
 
-    // Snapshot allowed during active trial
+    // Snapshot allowed in Free Edition
     assert!(verify_can_create_snapshot(&db).is_ok());
 }
 
@@ -67,7 +67,7 @@ fn test_licensing_permanent_restore_guarantee_when_trial_expired() {
     std::env::remove_var("SNAPVAULT_LICENSE_OVERRIDE");
     let (src_dir, _dest_dir, db, job_id) = setup_test_environment();
 
-    // 1. While in trial, create a file and run a successful snapshot
+    // 1. While in active license, create a file and run a successful snapshot
     let doc_path = src_dir.path().join("guaranteed_document.txt");
     fs::write(&doc_path, "Crucial user data created during trial").unwrap();
 
@@ -86,7 +86,7 @@ fn test_licensing_permanent_restore_guarantee_when_trial_expired() {
     // 3. New snapshot creation MUST be blocked
     let block_err = verify_can_create_snapshot(&db);
     assert!(block_err.is_err(), "Snapshot creation must be blocked when trial expired");
-    assert!(block_err.unwrap_err().to_string().contains("14-day free trial has expired"));
+    assert!(block_err.unwrap_err().to_string().contains("trial has expired"));
 
     // 4. CRITICAL TRUST RULE: Permanent Restore Guarantee
     // File browsing MUST remain 100% unlocked
@@ -115,7 +115,7 @@ fn test_licensing_permanent_restore_guarantee_when_trial_expired() {
     let restored_bytes = fs::read(&restored_file).expect("read restored file");
     assert_eq!(restored_bytes, b"Crucial user data created during trial");
 
-    // 5. Upgrade / Activate License unlocks new snapshots immediately
+    // 5. Upgrade / Clear override returns to Free Edition which unlocks snapshots immediately
     std::env::remove_var("SNAPVAULT_LICENSE_OVERRIDE");
     assert!(activate_license(&db, "STORE-PURCHASE-RECEIPT-KEY").unwrap());
 

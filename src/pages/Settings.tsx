@@ -17,7 +17,7 @@ import {
   Info,
   Sparkles,
 } from "lucide-react";
-import { getAppSettings, saveAppSettings, getLicenseStatus, activateLicenseKey } from "@/lib/ipc";
+import { getAppSettings, saveAppSettings, getLicenseStatus } from "@/lib/ipc";
 import type { AppSettingsDto, LicenseStatusDto } from "@/types/ipc";
 
 const DEFAULT_PATTERNS = [
@@ -52,9 +52,6 @@ export const Settings: React.FC<SettingsProps> = ({ currentTheme, onThemeChange 
 
   // License State
   const [license, setLicense] = useState<LicenseStatusDto | null>(null);
-  const [licenseKeyInput, setLicenseKeyInput] = useState("");
-  const [activating, setActivating] = useState(false);
-  const [activationMsg, setActivationMsg] = useState<string | null>(null);
 
   const loadLicense = () => {
     getLicenseStatus().then(setLicense).catch(() => null);
@@ -71,26 +68,6 @@ export const Settings: React.FC<SettingsProps> = ({ currentTheme, onThemeChange 
       .catch((err) => setError(String(err)));
     loadLicense();
   }, []);
-
-  const handleActivate = async () => {
-    if (!licenseKeyInput.trim()) return;
-    setActivating(true);
-    setActivationMsg(null);
-    try {
-      const ok = await activateLicenseKey(licenseKeyInput.trim());
-      if (ok) {
-        setActivationMsg("License successfully activated! SnapVault Pro unlocked.");
-        setLicenseKeyInput("");
-        loadLicense();
-      } else {
-        setActivationMsg("Invalid license key format.");
-      }
-    } catch (err) {
-      setActivationMsg(`Activation failed: ${err}`);
-    } finally {
-      setActivating(false);
-    }
-  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -391,38 +368,24 @@ export const Settings: React.FC<SettingsProps> = ({ currentTheme, onThemeChange 
         </div>
       </div>
 
-      {/* 6. License & Store Activation */}
+      {/* 6. License & Edition */}
       <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-4">
         <div className="flex items-center justify-between">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <KeyRound className="w-4 h-4 text-sky-400" />
               <h2 className="text-sm font-bold text-white tracking-tight">
-                Licensing & Microsoft Store Activation
+                Edition & Licensing
               </h2>
             </div>
             <p className="text-xs text-slate-400">
-              SnapVault is sold as a $19.99 one-time purchase with a 14-day free trial. Zero subscriptions.
+              Free & 100% Offline Edition — No Subscriptions, No Limits.
             </p>
           </div>
 
-          <span
-            className={`px-3 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 ${
-              license?.is_licensed
-                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
-                : license?.state === "TRIAL_EXPIRED"
-                ? "bg-rose-500/10 text-rose-400 border border-rose-500/30"
-                : "bg-amber-500/10 text-amber-300 border border-amber-500/30"
-            }`}
-          >
+          <span className="px-3 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>
-              {license?.is_licensed
-                ? "Pro Lifetime Active"
-                : license?.state === "TRIAL_EXPIRED"
-                ? "Trial Expired"
-                : `Trial: ${license?.days_remaining ?? 14} Days Left`}
-            </span>
+            <span>{license?.is_licensed ? "Free Edition Active" : "Offline Active"}</span>
           </span>
         </div>
 
@@ -434,39 +397,11 @@ export const Settings: React.FC<SettingsProps> = ({ currentTheme, onThemeChange 
               Permanent Restore Guarantee (Zero Hostage Policy)
             </p>
             <p className="text-slate-400 text-[11px] leading-relaxed">
-              Even if your 14-day trial expires, your ability to browse file histories on the Time
-              Machine timeline and restore any file or folder remains 100% free and unlocked forever.
+              Your ability to browse file histories on the Time Machine timeline and restore any
+              file or folder is 100% free and unlocked forever with zero limitations.
             </p>
           </div>
         </div>
-
-        {/* Activation Key Form (for Store / offline license keys) */}
-        {!license?.is_licensed && (
-          <div className="space-y-2 pt-1">
-            <label className="block text-xs font-medium text-slate-300">
-              Activate License Key
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={licenseKeyInput}
-                onChange={(e) => setLicenseKeyInput(e.target.value)}
-                placeholder="Enter SnapVault license key or Microsoft Store token..."
-                className="flex-1 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
-              />
-              <button
-                onClick={handleActivate}
-                disabled={activating || !licenseKeyInput.trim()}
-                className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-lg shadow-emerald-600/20 transition-all disabled:opacity-40"
-              >
-                {activating ? "Activating..." : "Activate"}
-              </button>
-            </div>
-            {activationMsg && (
-              <p className="text-xs text-emerald-400 font-medium">{activationMsg}</p>
-            )}
-          </div>
-        )}
       </div>
 
       {/* 7. About & Zero-Telemetry Privacy */}

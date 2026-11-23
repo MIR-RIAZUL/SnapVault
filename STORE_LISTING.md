@@ -4,9 +4,9 @@
 - **App Name:** SnapVault - Visual Backup Time Machine
 - **Category:** Utilities & Tools > Backup & Sync
 - **Publisher:** SnapVault
-- **Monetization Model:** $19.99 One-Time Purchase
-- **Trial Policy:** 14-Day Full-Featured Free Trial
-- **Permanent Restore Guarantee:** If the trial expires or the app is uninstalled, all visual browsing, file previews, diffs, and restore operations remain **100% UNLOCKED FOREVER** with zero restrictions. No user data is ever held hostage.
+- **Monetization Model:** Free & 100% Offline Edition — No Subscriptions, No Limits
+- **Trial Policy:** None (100% Free Forever)
+- **Permanent Restore Guarantee:** All visual browsing, file previews, diffs, and restore operations remain **100% UNLOCKED FOREVER** with zero restrictions. No user data is ever held hostage.
 
 ---
 
@@ -60,9 +60,8 @@ Whether you plug in an external USB SSD or back up to a secondary internal drive
 
 ## Transparent Pricing & The Permanent Restore Guarantee
 
-- **14-Day Full-Featured Free Trial**: Enjoy every feature with zero limitations.
-- **$19.99 One-Time Purchase**: Lifetime license to create unlimited backups across all your drives.
-- **The Permanent Restore Guarantee**: If your trial ends, we will **never** lock you out of your data. Visual timeline browsing, file previews, diffs, and complete restore operations remain **100% free and unlocked forever**.
+- **Free & 100% Offline Edition — No Subscriptions, No Limits**: Enjoy unlimited continuous backups across all your drives with zero monthly bills and zero payment required.
+- **The Permanent Restore Guarantee**: We will **never** lock you out of your data. Visual timeline browsing, file previews, diffs, and complete restore operations remain **100% free and unlocked forever**.
 
 ---
 

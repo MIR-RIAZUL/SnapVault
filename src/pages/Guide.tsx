@@ -460,7 +460,7 @@ export const Guide: React.FC<GuideProps> = ({ onNavigateTab }) => {
       {
         id: "licensing",
         category: "licensing",
-        title: "5. Privacy, 14-Day Trial & Permanent Restore Guarantee",
+        title: "5. Privacy, Free Edition & Permanent Restore Guarantee",
         subtitle: "100% offline security, zero subscriptions, and our guarantee that your data is never held hostage",
         icon: KeyRound,
         badge: "Guarantee",
@@ -476,7 +476,7 @@ export const Guide: React.FC<GuideProps> = ({ onNavigateTab }) => {
                 <strong className="text-white"> SnapVault will NEVER lock you out of your data.</strong>
               </p>
               <p className="text-xs text-slate-300 leading-relaxed">
-                If your 14-day free trial expires without purchasing a license, only creating <em>new</em> snapshots is paused.
+                SnapVault is a <strong className="text-emerald-300">Free & 100% Offline Edition — No Subscriptions, No Limits</strong>.
                 Visual Time Machine browsing, file previews, side-by-side diff comparisons, and file restores remain
                 <strong className="text-emerald-300"> 100% UNLOCKED AND FREE FOREVER</strong> on your computer.
               </p>
@@ -497,10 +497,10 @@ export const Guide: React.FC<GuideProps> = ({ onNavigateTab }) => {
               <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
                 <h4 className="font-semibold text-white flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-sky-400" />
-                  <span>$19.99 One-Time Purchase</span>
+                  <span>Free Edition — No Subscriptions, No Limits</span>
                 </h4>
                 <p className="text-slate-400 text-[11px]">
-                  No monthly bills. A single $19.99 one-time purchase from the Microsoft Store unlocks lifetime continuous
+                  No monthly bills, no credit cards, no in-app purchases. SnapVault Free Edition from the Microsoft Store unlocks lifetime continuous
                   snapshots across all your backup drives.
                 </p>
               </div>
@@ -678,7 +678,7 @@ export const Guide: React.FC<GuideProps> = ({ onNavigateTab }) => {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search topics (e.g. USB, ransomware, restore, timeline, tripwire, mirror, trial, locked files)..."
+            placeholder="Search topics (e.g. USB, ransomware, restore, timeline, tripwire, mirror, free edition, locked files)..."
             className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-slate-900/90 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 shadow-inner"
           />
           {searchQuery && (

@@ -117,8 +117,8 @@ Before uploading to Partner Center, validate the MSIX package against the offici
    - Reserve name `SnapVault`.
    - Set Product category: `Utilities & Tools > Backup & Sync`.
 2. **Pricing and Availability**:
-   - Set Base Price: `$19.99 USD` (or local equivalent).
-   - Enable **Free Trial**: Select `14-day trial`.
+   - Set Base Price: `Free` (0.00 USD).
+   - Monetization: Free & 100% Offline Edition — No Subscriptions, No Limits.
 3. **Store Listings**:
    - Copy and paste contents from [STORE_LISTING.md](file:///d:/antigravity_project/Time%20Mechine/STORE_LISTING.md).
    - Upload Store Logos, icon assets, and screenshots.

@@ -78,7 +78,8 @@ pub fn get_or_init_first_run_at(db: &DatabaseManager) -> Result<DateTime<Utc>> {
     Ok(now)
 }
 
-/// Computes the active license status: TRIAL_ACTIVE, TRIAL_EXPIRED, or LICENSED.
+/// Computes the active license status.
+/// In SnapVault v1.0.0 Free Edition, this defaults to LICENSED (no expiration, no limit).
 pub fn get_license_status(db: &DatabaseManager) -> Result<LicenseStatusDto> {
     let is_msix = is_packaged_msix();
 
@@ -119,55 +120,18 @@ pub fn get_license_status(db: &DatabaseManager) -> Result<LicenseStatusDto> {
         }
     }
 
-    // 2. Check if permanent license key is stored in SQLite
-    let license_val: Option<String> = db.with_conn(|conn| {
-        let mut stmt = conn.prepare("SELECT value FROM app_settings WHERE key = 'license_status';")?;
-        let mut rows = stmt.query([])?;
-        if let Some(r) = rows.next()? {
-            Ok(Some(r.get(0)?))
-        } else {
-            Ok(None)
-        }
-    })?;
-
-    if let Some(status) = license_val {
-        if status.eq_ignore_ascii_case("LICENSED") {
-            return Ok(LicenseStatusDto {
-                state: LicenseState::LICENSED,
-                is_licensed: true,
-                days_remaining: 0,
-                first_run_at: Utc::now().to_rfc3339(),
-                is_msix,
-                permanent_restore_unlocked: true,
-            });
-        }
-    }
-
-    // 3. Compute 14-day trial countdown from first-run timestamp
+    // Ensure first_run_at is initialized in SQLite
     let first_run = get_or_init_first_run_at(db)?;
-    let now = Utc::now();
-    let elapsed_days = (now - first_run).num_days();
 
-    if elapsed_days >= 14 {
-        Ok(LicenseStatusDto {
-            state: LicenseState::TRIAL_EXPIRED,
-            is_licensed: false,
-            days_remaining: 0,
-            first_run_at: first_run.to_rfc3339(),
-            is_msix,
-            permanent_restore_unlocked: true,
-        })
-    } else {
-        let days_remaining = (14 - elapsed_days) as u32;
-        Ok(LicenseStatusDto {
-            state: LicenseState::TRIAL_ACTIVE,
-            is_licensed: false,
-            days_remaining,
-            first_run_at: first_run.to_rfc3339(),
-            is_msix,
-            permanent_restore_unlocked: true,
-        })
-    }
+    // 2. Default to LICENSED (Free Edition — No Subscriptions, No Expirations, No Limits)
+    Ok(LicenseStatusDto {
+        state: LicenseState::LICENSED,
+        is_licensed: true,
+        days_remaining: 0,
+        first_run_at: first_run.to_rfc3339(),
+        is_msix,
+        permanent_restore_unlocked: true,
+    })
 }
 
 /// Enforces the Critical Trust Rule:
@@ -178,7 +142,7 @@ pub fn verify_can_create_snapshot(db: &DatabaseManager) -> Result<()> {
     let license = get_license_status(db)?;
     if license.state == LicenseState::TRIAL_EXPIRED {
         return Err(SnapVaultError::General(
-            "Your 14-day free trial has expired. Upgrade to SnapVault ($19.99 one-time purchase) to create new snapshots. Your existing backups and visual restore capabilities remain permanently active and free forever.".to_string(),
+            "Your trial has expired. SnapVault Free Edition unlocks continuous snapshots. Your existing backups and visual restore capabilities remain permanently active and free forever.".to_string(),
         ));
     }
     Ok(())
@@ -214,19 +178,35 @@ mod tests {
     static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
     #[test]
-    fn test_fresh_install_trial_starts_active_with_14_days() {
+    fn test_fresh_install_defaults_to_licensed_free_edition() {
         let _guard = ENV_MUTEX.lock().unwrap();
         let db = DatabaseManager::in_memory().expect("in-memory db");
         std::env::remove_var("SNAPVAULT_LICENSE_OVERRIDE");
+
+        let status = get_license_status(&db).expect("status failed");
+        assert_eq!(status.state, LicenseState::LICENSED);
+        assert_eq!(status.days_remaining, 0);
+        assert!(status.is_licensed);
+        assert!(status.permanent_restore_unlocked);
+
+        // Verify can create snapshot
+        assert!(verify_can_create_snapshot(&db).is_ok());
+    }
+
+    #[test]
+    fn test_env_override_trial_active() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        let db = DatabaseManager::in_memory().expect("in-memory db");
+        std::env::set_var("SNAPVAULT_LICENSE_OVERRIDE", "TRIAL_ACTIVE");
 
         let status = get_license_status(&db).expect("status failed");
         assert_eq!(status.state, LicenseState::TRIAL_ACTIVE);
         assert_eq!(status.days_remaining, 14);
         assert!(!status.is_licensed);
         assert!(status.permanent_restore_unlocked);
-
-        // Verify can create snapshot
         assert!(verify_can_create_snapshot(&db).is_ok());
+
+        std::env::remove_var("SNAPVAULT_LICENSE_OVERRIDE");
     }
 
     #[test]
@@ -244,32 +224,9 @@ mod tests {
         // Snapshot creation must be blocked
         let check = verify_can_create_snapshot(&db);
         assert!(check.is_err(), "Expired trial must block snapshot creation");
-        assert!(check.unwrap_err().to_string().contains("14-day free trial has expired"));
+        assert!(check.unwrap_err().to_string().contains("trial has expired"));
 
         std::env::remove_var("SNAPVAULT_LICENSE_OVERRIDE");
-    }
-
-    #[test]
-    fn test_sqlite_expired_trial_after_14_days() {
-        let _guard = ENV_MUTEX.lock().unwrap();
-        let db = DatabaseManager::in_memory().expect("in-memory db");
-        std::env::remove_var("SNAPVAULT_LICENSE_OVERRIDE");
-
-        let past_date = (Utc::now() - chrono::Duration::days(15)).to_rfc3339();
-        db.with_conn_mut(|conn| {
-            conn.execute(
-                "INSERT INTO app_settings (key, value) VALUES ('first_run_at', ?1);",
-                [&past_date],
-            )?;
-            Ok(())
-        })
-        .unwrap();
-
-        let status = get_license_status(&db).expect("status failed");
-        assert_eq!(status.state, LicenseState::TRIAL_EXPIRED);
-        assert_eq!(status.days_remaining, 0);
-        assert!(!status.is_licensed);
-        assert!(verify_can_create_snapshot(&db).is_err());
     }
 
     #[test]
