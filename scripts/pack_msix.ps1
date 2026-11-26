@@ -1,7 +1,7 @@
 param(
-    [string]$IdentityName = "PASTE-PACKAGE-IDENTITY-NAME",
-    [string]$Publisher = "CN=PASTE_PACKAGE_IDENTITY_PUBLISHER",
-    [string]$PublisherDisplayName = "PASTE_PUBLISHER_DISPLAY_NAME",
+    [string]$IdentityName = "MIRRIAZUL.SnapVault",
+    [string]$Publisher = "CN=02CE872D-25C9-4BA8-B0C5-09F51245CDEC",
+    [string]$PublisherDisplayName = "MIR RIAZUL",
     [string]$Version = "1.0.0.0"
 )
 
@@ -81,7 +81,7 @@ $manifestContent = @"
   </Dependencies>
 
   <Resources>
-    <Resource Language="x-generate" />
+    <Resource Language="en-us" />
   </Resources>
 
   <Applications>
@@ -120,7 +120,8 @@ $manifestContent = @"
   </Capabilities>
 </Package>
 "@
-Set-Content -Path "$stagingDir\AppxManifest.xml" -Value $manifestContent -Encoding UTF8
+$manifestPath = Join-Path (Resolve-Path $stagingDir).Path "AppxManifest.xml"
+[System.IO.File]::WriteAllText($manifestPath, $manifestContent, (New-Object System.Text.UTF8Encoding($false)))
 
 # 5. Locate MakeAppx.exe
 $makeAppx = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "MakeAppx.exe" -Recurse | Where-Object { $_.FullName -match "x64" } | Select-Object -First 1).FullName

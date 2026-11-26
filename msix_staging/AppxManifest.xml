@@ -1,8 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  SnapVault Microsoft Store AppxManifest
-  Package Identity & Full Trust Configuration for Windows 11 Desktop Bridge / MSIX
--->
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
@@ -10,14 +6,14 @@
   IgnorableNamespaces="uap rescap">
 
   <Identity
-    Name="PASTE-PACKAGE-IDENTITY-NAME"
-    Publisher="CN=PASTE_PACKAGE_IDENTITY_PUBLISHER"
+    Name="MIRRIAZUL.SnapVault"
+    Publisher="CN=02CE872D-25C9-4BA8-B0C5-09F51245CDEC"
     Version="1.0.0.0"
     ProcessorArchitecture="x64" />
 
   <Properties>
     <DisplayName>SnapVault - Visual Backup Time Machine</DisplayName>
-    <PublisherDisplayName>PASTE_PUBLISHER_DISPLAY_NAME</PublisherDisplayName>
+    <PublisherDisplayName>MIR RIAZUL</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
     <Description>100% offline, local-first visual backup and Time Machine for Windows 11. Content-addressed FastCDC chunk deduplication, BLAKE3 integrity verification, and zero cloud lock-in.</Description>
   </Properties>
@@ -27,7 +23,7 @@
   </Dependencies>
 
   <Resources>
-    <Resource Language="x-generate" />
+    <Resource Language="en-us" />
   </Resources>
 
   <Applications>

@@ -11,14 +11,14 @@
   IgnorableNamespaces="uap rescap desktop">
 
   <Identity
-    Name="SnapVault.VisualBackup"
-    Publisher="CN=SnapVault, O=SnapVault, C=US"
+    Name="MIRRIAZUL.SnapVault"
+    Publisher="CN=02CE872D-25C9-4BA8-B0C5-09F51245CDEC"
     Version="1.0.0.0"
     ProcessorArchitecture="x64" />
 
   <Properties>
     <DisplayName>SnapVault - Visual Backup Time Machine</DisplayName>
-    <PublisherDisplayName>SnapVault</PublisherDisplayName>
+    <PublisherDisplayName>MIR RIAZUL</PublisherDisplayName>
     <Logo>assets\StoreLogo.png</Logo>
     <Description>100% offline, local-first visual backup and Time Machine for Windows 11. Content-addressed FastCDC chunk deduplication, BLAKE3 integrity verification, and zero cloud lock-in.</Description>
   </Properties>
@@ -28,7 +28,7 @@
   </Dependencies>
 
   <Resources>
-    <Resource Language="x-generate" />
+    <Resource Language="en-us" />
   </Resources>
 
   <Applications>
