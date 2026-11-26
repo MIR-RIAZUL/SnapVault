@@ -70,7 +70,7 @@ $manifestContent = @"
     ProcessorArchitecture="x64" />
 
   <Properties>
-    <DisplayName>SnapVault - Visual Backup Time Machine</DisplayName>
+    <DisplayName>SnapVault</DisplayName>
     <PublisherDisplayName>$PublisherDisplayName</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
     <Description>100% offline, local-first visual backup and Time Machine for Windows 11. Content-addressed FastCDC chunk deduplication, BLAKE3 integrity verification, and zero cloud lock-in.</Description>
