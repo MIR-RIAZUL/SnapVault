@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SnapVault Microsoft Store AppxManifest
+  Package Identity & Full Trust Configuration for Windows 11 Desktop Bridge / MSIX
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap rescap">
+
+  <Identity
+    Name="PASTE-PACKAGE-IDENTITY-NAME"
+    Publisher="CN=PASTE_PACKAGE_IDENTITY_PUBLISHER"
+    Version="1.0.0.0"
+    ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>SnapVault - Visual Backup Time Machine</DisplayName>
+    <PublisherDisplayName>PASTE_PUBLISHER_DISPLAY_NAME</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <Description>100% offline, local-first visual backup and Time Machine for Windows 11. Content-addressed FastCDC chunk deduplication, BLAKE3 integrity verification, and zero cloud lock-in.</Description>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="x-generate" />
+  </Resources>
+
+  <Applications>
+    <Application
+      Id="App"
+      Executable="snapvault.exe"
+      EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="SnapVault"
+        Description="Visual Backup Time Machine for Windows 11"
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile ShortName="SnapVault" Wide310x150Logo="Assets\Wide310x150Logo.png">
+          <uap:ShowNameOnTiles>
+            <uap:ShowOn Tile="square150x150Logo" />
+          </uap:ShowNameOnTiles>
+        </uap:DefaultTile>
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <!--
+      JUSTIFICATION FOR runFullTrust RESTRICTED CAPABILITY:
+      SnapVault is a native local-first file backup and disaster recovery utility.
+      To perform its core product functionality, it requires full trust access to:
+      1. Traverse and read user-designated source directories across local NTFS/ReFS/exFAT volumes (walkdir).
+      2. Write content-addressed FastCDC chunk files and SQLite WAL databases directly to destination backup drives.
+      3. Perform atomic file restore operations to arbitrary user-specified destination paths.
+      4. Detect drive attachment/removal via Win32 volume notification APIs.
+      5. Adjust thread scheduling priority (THREAD_PRIORITY_BELOW_NORMAL) during Quiet Mode operation.
+      SnapVault contains ZERO network/telemetry capabilities and never accesses the internet.
+    -->
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>
